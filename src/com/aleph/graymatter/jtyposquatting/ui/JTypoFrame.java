@@ -8,12 +8,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
-import java.awt.datatransfer.Transferable;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 import static javax.imageio.ImageIO.read;
 
@@ -148,27 +148,35 @@ public class JTypoFrame extends JFrame {
 
 
     private void validateAction() {
-        JTypoSquatting jTypoSquatting = null;
+        SwingWorker<JTypoSquatting, Void> worker = new SwingWorker<>() {
+            @Override
+            protected JTypoSquatting doInBackground() throws Exception {
+                return new JTypoSquatting(jTextFieldInput.getText());
+            }
 
-        try {
-            jTypoSquatting = new JTypoSquatting(jTextFieldInput.getText());
-        } catch (FileNotFoundException | InvalidDomainException exception) {
-            System.out.println(exception.getClass().toString());
-            if (exception.getClass().toString().equals("java.io.FileNotFoundException")) {
-                jTextFieldConsole.setForeground(Color.RED);
-                jTextFieldConsole.setText("some files are missing");
-            } else if (exception.getClass().toString().equals("class com.aleph.graymatter.jtyposquatting.InvalidDomainException")) {
-                jTextFieldConsole.setForeground(Color.RED);
-                jTextFieldConsole.setText("invalid domain name");
+            @Override
+            protected void done() {
+                try {
+                    JTypoSquatting jTypoSquatting = get();
+                    jTextFieldConsole.setForeground(Color.BLACK);
+                    jTextFieldConsole.setText("number of generated squatable domains: " + jTypoSquatting.getNumberOfDomains());
+                    jTextAreaOutput.setText("");
+                    jTextAreaOutput.setText(jTypoSquatting.getListOfDomainsAsURL());
+                } catch (InterruptedException | ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof FileNotFoundException) {
+                        jTextFieldConsole.setForeground(Color.RED);
+                        jTextFieldConsole.setText("some files are missing");
+                    } else if (cause instanceof InvalidDomainException) {
+                        jTextFieldConsole.setForeground(Color.RED);
+                        jTextFieldConsole.setText("invalid domain name");
+                    } else {
+                        e.printStackTrace();
+                    }
+                }
             }
-        } finally {
-            if (jTypoSquatting != null) {
-                jTextFieldConsole.setForeground(Color.BLACK);
-                jTextFieldConsole.setText("number of generated squatable domains: " + jTypoSquatting.getNumberOfDomains());
-                jTextAreaOutput.setText("");
-                jTextAreaOutput.setText(jTypoSquatting.getListOfDomainsAsURL());
-            }
-        }
+        };
+        worker.execute();
     }
 
     private void copy() {
