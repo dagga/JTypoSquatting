@@ -6,6 +6,14 @@ plugins {
 group = 'com.aleph.graymatter'
 version = '1.0-SNAPSHOT'
 
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+}
+
 repositories {
     mavenCentral()
 }
@@ -16,10 +24,11 @@ dependencies {
 }
 
 application {
-    mainClass = 'com.aleph.graymatter.jtyposquatting.Main'
+    mainClass = 'com.aleph.graymatter.jtyposquatting.JTypoSquatting'
 }
 
 jar {
+    duplicatesStrategy = 'exclude'
     manifest {
         attributes 'Main-Class': application.mainClass
     }
