@@ -12,11 +12,19 @@ import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class JTypoFrame extends JFrame {
 
@@ -26,8 +34,11 @@ public class JTypoFrame extends JFrame {
     private final JTextField jTextFieldConsole;
     private final JButton jGenerateButton;
     private final JButton jCopyButton;
+    private final ExecutorService executorService;
 
     public JTypoFrame() {
+        executorService = Executors.newFixedThreadPool(20); // Thread pool for parallel checks
+
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
@@ -58,7 +69,7 @@ public class JTypoFrame extends JFrame {
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setBorder(new EmptyBorder(0, 10, 0, 0));
 
-        String[] columnNames = {"Domain URL", "Status"}; // Added Status column for future use
+        String[] columnNames = {"Domain URL", "Status", "Title"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -73,13 +84,26 @@ public class JTypoFrame extends JFrame {
         TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
         jTableOutput.setRowSorter(sorter);
 
-        // Custom Renderer for Alternating Colors
+        // Custom Renderer for Status Colors
         jTableOutput.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
                 Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                
                 if (!isSelected) {
-                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                    // Get status from the model, not the view, to ensure correct color mapping
+                    int modelRow = table.convertRowIndexToModel(row);
+                    String status = (String) tableModel.getValueAt(modelRow, 1);
+                    
+                    if ("Testing...".equals(status)) {
+                        c.setBackground(Color.ORANGE);
+                    } else if ("Alive".equals(status)) {
+                        c.setBackground(Color.RED);
+                    } else if ("Dead".equals(status)) {
+                        c.setBackground(Color.GREEN);
+                    } else {
+                        c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                    }
                 }
                 return c;
             }
@@ -143,7 +167,9 @@ public class JTypoFrame extends JFrame {
                     
                     ArrayList<String> domains = jTypoSquatting.getListOfDomains();
                     for (String domain : domains) {
-                        tableModel.addRow(new Object[]{domain, "Generated"});
+                        tableModel.addRow(new Object[]{domain, "Testing...", ""});
+                        int row = tableModel.getRowCount() - 1;
+                        executorService.submit(() -> checkDomain(domain, row));
                     }
                     
                 } catch (InterruptedException | ExecutionException e) {
@@ -165,6 +191,75 @@ public class JTypoFrame extends JFrame {
         worker.execute();
     }
 
+    private void checkDomain(String domainUrl, int row) {
+        String status = "Dead";
+        String title = "";
+        
+        // Try HTTPS first
+        String[] result = fetchTitle(domainUrl);
+        if (result != null) {
+            status = "Alive";
+            title = result[1];
+        } else {
+            // Fallback to HTTP
+            String httpUrl = domainUrl.replace("https://", "http://");
+            result = fetchTitle(httpUrl);
+            if (result != null) {
+                status = "Alive";
+                title = result[1];
+            }
+        }
+
+        String finalStatus = status;
+        String finalTitle = title;
+        SwingUtilities.invokeLater(() -> {
+            if (row < tableModel.getRowCount()) {
+                tableModel.setValueAt(finalStatus, row, 1);
+                tableModel.setValueAt(finalTitle, row, 2);
+                // Force repaint to update color
+                tableModel.fireTableCellUpdated(row, 1);
+                tableModel.fireTableCellUpdated(row, 2);
+            }
+        });
+    }
+
+    private String[] fetchTitle(String urlString) {
+        try {
+            URL url = new URL(urlString);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(3000); // 3 seconds timeout
+            connection.setReadTimeout(3000);
+            connection.setRequestMethod("GET"); // Use GET to fetch content
+            connection.setInstanceFollowRedirects(true);
+            
+            int responseCode = connection.getResponseCode();
+            if (200 <= responseCode && responseCode <= 399) {
+                // Read content to find title
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    StringBuilder content = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        content.append(line);
+                        if (content.toString().toLowerCase().contains("</title>")) {
+                            break; // Stop reading once title is found
+                        }
+                    }
+                    
+                    Pattern pattern = Pattern.compile("<title>(.*?)</title>", Pattern.CASE_INSENSITIVE);
+                    Matcher matcher = pattern.matcher(content.toString());
+                    String title = "";
+                    if (matcher.find()) {
+                        title = matcher.group(1).trim();
+                    }
+                    return new String[]{String.valueOf(responseCode), title};
+                }
+            }
+        } catch (IOException e) {
+            // Ignore
+        }
+        return null;
+    }
+
     private void copy() {
         int[] selectedRows = jTableOutput.getSelectedRows();
         if (selectedRows.length == 0) {
@@ -179,7 +274,9 @@ public class JTypoFrame extends JFrame {
         for (int row : selectedRows) {
             // Convert view index to model index in case of sorting
             int modelRow = jTableOutput.convertRowIndexToModel(row);
-            sb.append(tableModel.getValueAt(modelRow, 0)).append("\n");
+            sb.append(tableModel.getValueAt(modelRow, 0)).append("\t")
+              .append(tableModel.getValueAt(modelRow, 1)).append("\t")
+              .append(tableModel.getValueAt(modelRow, 2)).append("\n");
         }
 
         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
