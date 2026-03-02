@@ -123,6 +123,10 @@ public class JTypoSquatting {
         return listOfDomainsAsString.toString();
     }
 
+    public ArrayList<String> getListOfDomains() {
+        return listOfDomains;
+    }
+
     public String getNumberOfDomains() {
         listOfDomains.trimToSize();
         return Integer.toString(listOfDomains.size());

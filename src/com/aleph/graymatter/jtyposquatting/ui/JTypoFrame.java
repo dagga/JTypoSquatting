@@ -6,18 +6,23 @@ import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.StringSelection;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 
 public class JTypoFrame extends JFrame {
 
     private final JTextField jTextFieldInput;
-    private final JTextArea jTextAreaOutput;
+    private final JTable jTableOutput;
+    private final DefaultTableModel tableModel;
     private final JTextField jTextFieldConsole;
     private final JButton jGenerateButton;
     private final JButton jCopyButton;
@@ -49,12 +54,38 @@ public class JTypoFrame extends JFrame {
         northPanel.add(jGenerateButton);
         add(northPanel, BorderLayout.NORTH);
 
-        // ===== Center Panel (Output) =====
+        // ===== Center Panel (Output Table) =====
         JPanel centerPanel = new JPanel(new BorderLayout());
         centerPanel.setBorder(new EmptyBorder(0, 10, 0, 0));
-        jTextAreaOutput = new JTextArea();
-        jTextAreaOutput.setEditable(false);
-        JScrollPane scrollPane = new JScrollPane(jTextAreaOutput);
+
+        String[] columnNames = {"Domain URL", "Status"}; // Added Status column for future use
+        tableModel = new DefaultTableModel(columnNames, 0) {
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return false; // Make cells non-editable
+            }
+        };
+        jTableOutput = new JTable(tableModel);
+        jTableOutput.setFillsViewportHeight(true);
+        jTableOutput.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        
+        // Enable Sorting
+        TableRowSorter<DefaultTableModel> sorter = new TableRowSorter<>(tableModel);
+        jTableOutput.setRowSorter(sorter);
+
+        // Custom Renderer for Alternating Colors
+        jTableOutput.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    c.setBackground(row % 2 == 0 ? Color.WHITE : new Color(240, 240, 240));
+                }
+                return c;
+            }
+        });
+
+        JScrollPane scrollPane = new JScrollPane(jTableOutput);
         centerPanel.add(scrollPane, BorderLayout.CENTER);
 
         // ===== East Panel (Copy Button) =====
@@ -69,7 +100,7 @@ public class JTypoFrame extends JFrame {
             jCopyButton.setText("Copy");
             e.printStackTrace();
         }
-        jCopyButton.setToolTipText("Copy results to clipboard");
+        jCopyButton.setToolTipText("Copy selected rows to clipboard");
         eastPanel.add(jCopyButton);
         centerPanel.add(eastPanel, BorderLayout.EAST);
         add(centerPanel, BorderLayout.CENTER);
@@ -95,7 +126,7 @@ public class JTypoFrame extends JFrame {
     private void validateAction() {
         jGenerateButton.setEnabled(false);
         jTextFieldConsole.setText("Generating domains... please wait.");
-        jTextAreaOutput.setText("");
+        tableModel.setRowCount(0); // Clear existing data
 
         SwingWorker<JTypoSquatting, Void> worker = new SwingWorker<>() {
             @Override
@@ -109,7 +140,12 @@ public class JTypoFrame extends JFrame {
                     JTypoSquatting jTypoSquatting = get();
                     jTextFieldConsole.setForeground(Color.BLACK);
                     jTextFieldConsole.setText("Number of generated squatable domains: " + jTypoSquatting.getNumberOfDomains());
-                    jTextAreaOutput.setText(jTypoSquatting.getListOfDomainsAsURL());
+                    
+                    ArrayList<String> domains = jTypoSquatting.getListOfDomains();
+                    for (String domain : domains) {
+                        tableModel.addRow(new Object[]{domain, "Generated"});
+                    }
+                    
                 } catch (InterruptedException | ExecutionException e) {
                     Throwable cause = e.getCause();
                     jTextFieldConsole.setForeground(Color.RED);
@@ -130,10 +166,26 @@ public class JTypoFrame extends JFrame {
     }
 
     private void copy() {
+        int[] selectedRows = jTableOutput.getSelectedRows();
+        if (selectedRows.length == 0) {
+            // If no rows selected, copy all
+            selectedRows = new int[jTableOutput.getRowCount()];
+            for (int i = 0; i < jTableOutput.getRowCount(); i++) {
+                selectedRows[i] = i;
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int row : selectedRows) {
+            // Convert view index to model index in case of sorting
+            int modelRow = jTableOutput.convertRowIndexToModel(row);
+            sb.append(tableModel.getValueAt(modelRow, 0)).append("\n");
+        }
+
         Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        StringSelection data = new StringSelection(jTextAreaOutput.getText());
+        StringSelection data = new StringSelection(sb.toString());
         clipboard.setContents(data, data);
         jTextFieldConsole.setForeground(Color.BLACK);
-        jTextFieldConsole.setText("Results copied to clipboard.");
+        jTextFieldConsole.setText("Copied " + selectedRows.length + " domains to clipboard.");
     }
 }
