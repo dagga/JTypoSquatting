@@ -130,9 +130,9 @@ public class JTypoFrame extends JFrame {
         jTableOutput.getColumnModel().getColumn(1).setPreferredWidth(100);
         jTableOutput.getColumnModel().getColumn(2).setPreferredWidth(250);
         jTableOutput.getColumnModel().getColumn(3).setPreferredWidth(80);
-        jTableOutput.getColumnModel().getColumn(4).setMinWidth(40);
-        jTableOutput.getColumnModel().getColumn(4).setMaxWidth(40);
-        jTableOutput.getColumnModel().getColumn(4).setPreferredWidth(40);
+        jTableOutput.getColumnModel().getColumn(4).setMinWidth(50);
+        jTableOutput.getColumnModel().getColumn(4).setMaxWidth(50);
+        jTableOutput.getColumnModel().getColumn(4).setPreferredWidth(50);
         jTableOutput.getColumnModel().getColumn(5).setPreferredWidth(300);
         jTableOutput.getColumnModel().getColumn(6).setMinWidth(0);
         jTableOutput.getColumnModel().getColumn(6).setMaxWidth(0);
@@ -1169,7 +1169,7 @@ public class JTypoFrame extends JFrame {
      */
     private class FlagCellRenderer extends JLabel implements TableCellRenderer {
         private final FlagIconManager flagIconManager;
-        
+
         public FlagCellRenderer() {
             setHorizontalAlignment(JLabel.CENTER);
             setOpaque(true);
@@ -1179,7 +1179,7 @@ public class JTypoFrame extends JFrame {
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
-            // Get the language from column 3 (not the flag emoji from column 4)
+            // Get the language from column 3
             int modelRow = table.convertRowIndexToModel(row);
             Object languageObj = table.getModel().getValueAt(modelRow, 3);
             String language = (languageObj != null) ? languageObj.toString() : "";
@@ -1203,7 +1203,7 @@ public class JTypoFrame extends JFrame {
                 setForeground(Color.BLACK);
             }
 
-            // Get flag icon from the manager
+            // Get flag icon from the language
             ImageIcon flagIcon = flagIconManager.getFlagIconForLanguage(language);
             setText("");
             setIcon(flagIcon);
