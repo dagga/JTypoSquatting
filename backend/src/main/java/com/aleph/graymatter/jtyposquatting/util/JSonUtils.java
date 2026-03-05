@@ -1,15 +1,10 @@
 package com.aleph.graymatter.jtyposquatting.util;
 
 import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-
 import java.util.Iterator;
-import java.util.Set;
 import java.util.StringTokenizer;
 
 public class JSonUtils {
-
-    private static final JSONParser jsonP = new JSONParser();
 
     /**
      * When keys and values have to be swapped and keys are not needed
