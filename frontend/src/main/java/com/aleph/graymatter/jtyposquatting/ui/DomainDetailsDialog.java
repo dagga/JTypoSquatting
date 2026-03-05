@@ -7,9 +7,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.net.URI;
-import java.util.Date;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Dialog for displaying domain details with HTML preview and metadata
