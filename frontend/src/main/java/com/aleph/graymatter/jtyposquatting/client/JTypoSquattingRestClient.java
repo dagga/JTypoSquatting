@@ -3,6 +3,8 @@ package com.aleph.graymatter.jtyposquatting.client;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.google.gson.Gson;
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -22,6 +24,7 @@ import static java.lang.Thread.sleep;
 
 public class JTypoSquattingRestClient {
 
+    private static final Logger logger = LoggerFactory.getLogger(JTypoSquattingRestClient.class);
     private final String baseUrl;
     private final HttpClient httpClient;
     private final Gson gson;
@@ -254,10 +257,9 @@ public class JTypoSquattingRestClient {
             connection.setRequestMethod("DELETE");
             connection.setConnectTimeout(5000);
             int responseCode = connection.getResponseCode();
-            System.out.println("[RestClient] Cancel and clear response: " + responseCode);
+            logger.debug("Cancel and clear response: {}", responseCode);
         } catch (Exception e) {
-            // Ignore errors - backend will still process what it can
-            System.err.println("[RestClient] Error during cancel and clear: " + e.getMessage());
+            logger.error("Error during cancel and clear: {}", e.getMessage());
         }
     }
 

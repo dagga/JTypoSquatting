@@ -125,6 +125,10 @@ project(':frontend') {
         // Language detection
         implementation 'com.github.pemistahl:lingua:1.2.1'
 
+        // SLF4J logging
+        implementation 'org.slf4j:slf4j-api:2.0.16'
+        runtimeOnly 'ch.qos.logback:logback-classic:1.5.18'
+
         // No JavaFX dependencies: using Swing for UI.
     }
 

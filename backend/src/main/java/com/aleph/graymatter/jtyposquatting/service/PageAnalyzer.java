@@ -17,6 +17,8 @@ import javafx.stage.StageStyle;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.awt.Graphics2D;
@@ -34,6 +36,7 @@ import javax.imageio.ImageIO;
 
 @Service
 public class PageAnalyzer {
+    private static final Logger logger = LoggerFactory.getLogger(PageAnalyzer.class);
     private static final LanguageDetector LANGUAGE_DETECTOR = LanguageDetectorBuilder
             .fromLanguages(
                     Language.ENGLISH,
@@ -61,75 +64,74 @@ public class PageAnalyzer {
             if (javafxInitialized) return;
 
             try {
-                // Check if DISPLAY is available
                 String display = System.getenv("DISPLAY");
                 boolean hasDisplay = display != null && !display.isEmpty();
-                
-                // Check existing prism.order property (may be set by JVM args)
                 String existingPrismOrder = System.getProperty("prism.order");
-                System.out.println("[PageAnalyzer] Initializing JavaFX (DISPLAY=" + display + ", prism.order=" + existingPrismOrder + ")");
+                logger.debug("Initializing JavaFX (DISPLAY={}, prism.order={})", display, existingPrismOrder);
 
-                // Don't override prism.order if already set by JVM arguments
-                // Just ensure other settings are correct
                 System.setProperty("prism.vsync", "false");
                 System.setProperty("prism.forceGPU", "false");
-                
+
                 if (hasDisplay) {
                     System.setProperty("glass.platform", "gtk");
-                    System.out.println("[PageAnalyzer] Using GTK glass platform");
+                    logger.debug("Using GTK glass platform");
                 } else {
                     System.setProperty("glass.platform", "monocle");
                     System.setProperty("java.awt.headless", "false");
-                    System.out.println("[PageAnalyzer] Using monocle glass platform (no DISPLAY)");
+                    logger.debug("Using monocle glass platform (no DISPLAY)");
                 }
 
-                // Initialize JavaFX Platform
                 CountDownLatch initLatch = new CountDownLatch(1);
-                AtomicReference<Exception> initException = new AtomicReference<>();
-                
                 Platform.startup(() -> {
                     javafxInitialized = true;
                     initLatch.countDown();
-                    System.out.println("[PageAnalyzer] JavaFX initialized successfully");
+                    logger.debug("JavaFX initialized successfully");
                 });
 
-                // Wait for initialization
                 if (!initLatch.await(10, TimeUnit.SECONDS)) {
-                    Exception ex = initException.get();
-                    if (ex != null) {
-                        throw new RuntimeException("JavaFX initialization timeout", ex);
-                    }
-                    throw new RuntimeException("JavaFX initialization timeout after 10 seconds");
+                    throw new RuntimeException("JavaFX initialization timeout");
                 }
 
             } catch (IllegalStateException e) {
                 if (e.getMessage() != null && e.getMessage().contains("Toolkit already initialized")) {
                     javafxInitialized = true;
-                    System.out.println("[PageAnalyzer] JavaFX already initialized");
+                    logger.debug("JavaFX already initialized");
                 } else {
-                    System.err.println("[PageAnalyzer] JavaFX initialization failed (IllegalStateException): " + e.getMessage());
-                    e.printStackTrace();
+                    logger.error("JavaFX initialization failed: {}", e.getMessage());
                     throw new RuntimeException("Failed to initialize JavaFX: " + e.getMessage(), e);
                 }
             } catch (Exception e) {
-                System.err.println("[PageAnalyzer] JavaFX initialization error: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("JavaFX initialization error: {}", e.getMessage());
                 throw new RuntimeException("Failed to initialize JavaFX: " + e.getMessage(), e);
             }
         }
     }
 
     public DomainPageDTO analyzePage(String domain) {
+        if (Thread.currentThread().isInterrupted()) {
+            logger.debug("Analysis cancelled for {} (interrupted)", domain);
+            DomainPageDTO data = new DomainPageDTO(domain);
+            data.setHttpCode(0);
+            return data;
+        }
+
         DomainPageDTO data = new DomainPageDTO(domain);
 
         try {
             URL url = new URL("https://" + domain);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
-            connection.setConnectTimeout(3000); // 3 seconds connection timeout
-            connection.setReadTimeout(10000); // 10 seconds read timeout
+            connection.setConnectTimeout(3000);
+            connection.setReadTimeout(10000);
             connection.setInstanceFollowRedirects(true);
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+
+            if (Thread.currentThread().isInterrupted()) {
+                logger.debug("Analysis cancelled for {} (interrupted after connection)", domain);
+                connection.disconnect();
+                data.setHttpCode(0);
+                return data;
+            }
 
             if (connection instanceof javax.net.ssl.HttpsURLConnection httpsConn) {
                 httpsConn.setHostnameVerifier((hostname, session) -> true);
@@ -150,13 +152,13 @@ public class PageAnalyzer {
                     }, new java.security.SecureRandom());
                     httpsConn.setSSLSocketFactory(sc.getSocketFactory());
                 } catch (Exception ignored) {
+                    // Ignore SSL initialization errors
                 }
             }
 
             int responseCode = connection.getResponseCode();
             data.setHttpCode(responseCode);
-            
-            // Capture HTTP headers
+
             Map<String, java.util.List<String>> headerFields = connection.getHeaderFields();
             if (headerFields != null) {
                 for (Map.Entry<String, java.util.List<String>> entry : headerFields.entrySet()) {
@@ -176,13 +178,11 @@ public class PageAnalyzer {
                 
                 String textContent = doc.text();
                 data.setTextContent(textContent);
-                
-                // Extract homepage text (first 200 chars)
+
                 if (textContent != null) {
                     data.setHomepageText(textContent.length() > 200 ? textContent.substring(0, 200) + "..." : textContent);
                 }
-                
-                // Extract page title
+
                 String title = doc.title();
                 data.setTitle(title != null && !title.trim().isEmpty() ? title : "");
 
@@ -211,35 +211,38 @@ public class PageAnalyzer {
                         }
                     }
                 }
-                
-                // Only take screenshot if HTTP code is 2xx and we have valid HTML content
+
+                if (Thread.currentThread().isInterrupted()) {
+                    logger.debug("Analysis cancelled for {} (interrupted before screenshot)", domain);
+                    connection.disconnect();
+                    data.setHttpCode(0);
+                    return data;
+                }
+
                 if (responseCode >= 200 && responseCode < 300 && html != null && !html.trim().isEmpty()) {
-                    // Additional check: ensure the page has some minimal content
-                    if (textContent != null && textContent.length() > 10) {
+                    int textLength = textContent != null ? textContent.length() : 0;
+                    logger.debug("Checking screenshot conditions for {} (HTTP={}, textLength={})", domain, responseCode, textLength);
+
+                    if (textLength >= 5) {
                         byte[] screenshot = captureScreenshot(url);
                         data.setScreenshot(screenshot);
-                        System.out.println("[PageAnalyzer] Screenshot captured for " + domain + ": " + (screenshot != null ? screenshot.length : 0) + " bytes");
-                        if (screenshot == null) {
-                            System.out.println("[PageAnalyzer] Screenshot capture returned null for " + domain);
-                        }
+                        logger.debug("Screenshot captured for {}: {} bytes", domain, screenshot != null ? screenshot.length : 0);
                     } else {
                         data.setScreenshot(null);
-                        System.out.println("[PageAnalyzer] No screenshot (text too short: " + (textContent != null ? textContent.length() : 0) + " chars) for " + domain);
+                        logger.debug("No screenshot (text too short: {} chars) for {}", textLength, domain);
                     }
                 } else {
                     data.setScreenshot(null);
-                    System.out.println("[PageAnalyzer] No screenshot (HTTP " + responseCode + ", HTML empty: " + (html == null || html.trim().isEmpty()) + ") for " + domain);
+                    logger.debug("No screenshot (HTTP {}) for {}", responseCode, domain);
                 }
             }
             connection.disconnect();
         } catch (java.net.UnknownHostException e) {
-            // Domain not found - this is normal for many typo domains
             data.setHttpCode(0);
         } catch (java.net.SocketTimeoutException e) {
-            // Connection timeout - normal for dead domains
             data.setHttpCode(0);
         } catch (Exception e) {
-            System.err.println("Error analyzing page " + domain + ": " + e.getMessage());
+            logger.error("Error analyzing page {}: {}", domain, e.getMessage());
         }
 
         return data;
@@ -264,12 +267,13 @@ public class PageAnalyzer {
      * Renders the page and captures the visible portion as an image.
      */
     private static byte[] captureScreenshot(URL url) {
+        logger.debug("captureScreenshot() called for {}", url);
+
         try {
             initJavaFXIfNeeded();
 
-            // Verify JavaFX is actually initialized
             if (!javafxInitialized) {
-                System.err.println("[PageAnalyzer] JavaFX not initialized after initJavaFXIfNeeded, returning placeholder");
+                logger.error("JavaFX not initialized after initJavaFXIfNeeded, returning placeholder");
                 return createPlaceholderScreenshot("JavaFX initialization failed");
             }
 
@@ -278,9 +282,10 @@ public class PageAnalyzer {
             AtomicReference<Exception> captureException = new AtomicReference<>();
             AtomicReference<String> failureReason = new AtomicReference<>();
 
-            System.out.println("[PageAnalyzer] Starting screenshot capture for " + url);
+            logger.debug("Starting screenshot capture for {}", url);
 
             Platform.runLater(() -> {
+                logger.debug("Platform.runLater() executed for {}", url);
                 try {
                     // Create stage with DECORATED style for proper rendering
                     Stage stage = new Stage(StageStyle.DECORATED);
@@ -304,14 +309,14 @@ public class PageAnalyzer {
                     scene.setFill(javafx.scene.paint.Color.WHITE);
                     stage.setScene(scene);
 
-                    // CRITICAL: Show and focus before loading
+                    // Show and focus before loading
                     stage.show();
                     stage.toFront();
                     stage.requestFocus();
 
-                    System.out.println("[PageAnalyzer] Stage shown, waiting for pulse");
+                    logger.debug("Stage shown, waiting for pulse");
 
-                    // Wait for JavaFX pulse (first rendering) - CRITICAL for software rendering
+                    // Wait for JavaFX pulse (first rendering)
                     CountDownLatch pulseLatch = new CountDownLatch(1);
                     Platform.runLater(() -> {
                         try {
@@ -323,20 +328,40 @@ public class PageAnalyzer {
                     });
                     pulseLatch.await(2, TimeUnit.SECONDS);
 
-                    System.out.println("[PageAnalyzer] Loading URL: " + url);
+                    logger.debug("Loading URL: {}", url);
 
                     // Load the URL
                     webView.getEngine().load(url.toString());
 
                     webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
                         if (newState == Worker.State.SUCCEEDED) {
-                            System.out.println("[PageAnalyzer] Page loaded successfully, waiting for JS");
-                            
-                            // Wait for JavaScript and dynamic content (increased to 5 seconds)
+                            logger.debug("Page loaded successfully, waiting for JS");
+
+                            // Wait for JavaScript and dynamic content
                             try {
-                                Thread.sleep(5000);
+                                for (int i = 0; i < 8; i++) {
+                                    if (Thread.currentThread().isInterrupted()) {
+                                        logger.debug("Screenshot capture interrupted for {}", url);
+                                        latch.countDown();
+                                        Platform.runLater(stage::close);
+                                        return;
+                                    }
+                                    Thread.sleep(1000);
+                                }
                             } catch (InterruptedException e) {
+                                logger.debug("Screenshot wait interrupted for {}", url);
                                 Thread.currentThread().interrupt();
+                                latch.countDown();
+                                Platform.runLater(stage::close);
+                                return;
+                            }
+
+                            // Check for interruption after waiting
+                            if (Thread.currentThread().isInterrupted()) {
+                                logger.debug("Screenshot capture interrupted after wait for {}", url);
+                                latch.countDown();
+                                Platform.runLater(stage::close);
+                                return;
                             }
 
                             int contentWidth = 1280;
@@ -368,7 +393,7 @@ public class PageAnalyzer {
                             // Force layout update
                             scene.getRoot().requestLayout();
 
-                            // Wait for another JavaFX pulse after resize - CRITICAL
+                            // Wait for another JavaFX pulse after resize
                             CountDownLatch resizeLatch = new CountDownLatch(1);
                             Platform.runLater(() -> {
                                 try {
@@ -384,7 +409,7 @@ public class PageAnalyzer {
                                 Thread.currentThread().interrupt();
                             }
 
-                            System.out.println("[PageAnalyzer] Capturing snapshot: " + contentWidth + "x" + contentHeight);
+                            logger.debug("Capturing snapshot: {}x{}", contentWidth, contentHeight);
 
                             // Capture snapshot
                             javafx.scene.SnapshotParameters params = new javafx.scene.SnapshotParameters();
@@ -392,8 +417,7 @@ public class PageAnalyzer {
                             WritableImage fxImage = new WritableImage(contentWidth, contentHeight);
                             webView.snapshot(params, fxImage);
 
-                            // Debug: check if image has content
-                            System.out.println("[PageAnalyzer] Snapshot captured: " + contentWidth + "x" + contentHeight);
+                            logger.debug("Snapshot captured: {}x{}", contentWidth, contentHeight);
 
                             // Check pixel data to detect empty/white screenshots
                             javafx.scene.image.PixelReader pixelReader = fxImage.getPixelReader();
@@ -408,14 +432,16 @@ public class PageAnalyzer {
                                         }
                                     }
                                 }
-                                System.out.println("[PageAnalyzer] Screenshot has visual content: " + hasContent);
+                                logger.debug("Screenshot has visual content: {}", hasContent);
                             } else {
-                                System.err.println("[PageAnalyzer] PixelReader is null");
+                                logger.error("PixelReader is null");
                             }
 
                             if (!hasContent) {
-                                System.out.println("[PageAnalyzer] Detected empty/white screenshot for " + url);
-                                failureReason.set("Blank screenshot detected");
+                                logger.debug("Detected empty/white screenshot for {} - returning placeholder", url);
+                                // Instead of returning null, create a placeholder with domain info
+                                byte[] placeholder = createPlaceholderScreenshot("Page rendered empty");
+                                result.set(placeholder);
                                 latch.countDown();
                                 Platform.runLater(stage::close);
                                 return;
@@ -436,7 +462,7 @@ public class PageAnalyzer {
                             if (capturedImage != null) {
                                 g2d.drawImage(capturedImage, 0, 0, 320, 240, null);
                             } else {
-                                System.err.println("[PageAnalyzer] SwingFXUtils.fromFXImage returned null");
+                                logger.error("SwingFXUtils.fromFXImage returned null");
                             }
 
                             g2d.dispose();
@@ -445,20 +471,19 @@ public class PageAnalyzer {
                                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                                 ImageIO.write(thumbnail, "png", baos);
                                 byte[] screenshotData = baos.toByteArray();
-                                // Check if screenshot is not empty
                                 if (screenshotData.length > 0) {
                                     result.set(screenshotData);
                                 } else {
                                     failureReason.set("Screenshot data is empty");
                                 }
                             } catch (Exception e) {
-                                System.err.println("[PageAnalyzer] Error writing screenshot: " + e.getMessage());
+                                logger.error("Error writing screenshot: {}", e.getMessage());
                                 failureReason.set("Error writing screenshot: " + e.getMessage());
                             }
                             latch.countDown();
                             Platform.runLater(stage::close);
                         } else if (newState == Worker.State.FAILED) {
-                            System.err.println("[PageAnalyzer] Page load failed for screenshot: " + url);
+                            logger.error("Page load failed for screenshot: {}", url);
                             failureReason.set("Page load failed");
                             latch.countDown();
                             Platform.runLater(stage::close);
@@ -466,38 +491,45 @@ public class PageAnalyzer {
                     });
                 } catch (Exception e) {
                     captureException.set(e);
-                    System.err.println("[PageAnalyzer] Error in captureScreenshot: " + e.getMessage());
-                    e.printStackTrace();
+                    logger.error("Error in captureScreenshot: {}", e.getMessage());
                     latch.countDown();
                 }
             });
 
             try {
-                boolean completed = latch.await(30, TimeUnit.SECONDS);
-                if (completed && result.get() != null) {
+                // Wait with timeout, but check for interruption periodically
+                for (int i = 0; i < 30; i++) {
+                    if (Thread.currentThread().isInterrupted()) {
+                        logger.debug("Screenshot wait interrupted (latch) for {}", url);
+                        return null;
+                    }
+                    if (latch.await(1, TimeUnit.SECONDS)) {
+                        break;
+                    }
+                }
+
+                if (result.get() != null) {
                     return result.get();
-                } else if (completed && result.get() == null) {
+                } else {
                     Exception ex = captureException.get();
                     if (ex != null) {
-                        System.err.println("[PageAnalyzer] Screenshot capture completed but result is null. Exception: " + ex.getMessage());
+                        logger.error("Screenshot capture completed but result is null. Exception: {}", ex.getMessage());
                     } else {
                         String reason = failureReason.get();
                         if (reason != null) {
-                            System.err.println("[PageAnalyzer] Screenshot capture failed: " + reason);
+                            logger.error("Screenshot capture failed: {}", reason);
                         } else {
-                            System.err.println("[PageAnalyzer] Screenshot capture completed but result is null (no exception)");
+                            logger.error("Screenshot capture completed but result is null (no exception)");
                         }
                     }
-                } else {
-                    System.err.println("[PageAnalyzer] Screenshot capture timed out after 30 seconds for " + url);
                 }
             } catch (Exception e) {
-                System.err.println("[PageAnalyzer] Error waiting for screenshot capture: " + e.getMessage());
+                logger.error("Error waiting for screenshot capture: {}", e.getMessage());
             }
             return null;
         } catch (Exception e) {
-            System.err.println("[PageAnalyzer] Fatal error in captureScreenshot: " + e.getMessage());
-            e.printStackTrace();
+            logger.error("Fatal error in captureScreenshot: {}", e.getMessage());
+            // Return placeholder instead of null
             return createPlaceholderScreenshot("Error: " + e.getMessage());
         }
     }
@@ -534,7 +566,7 @@ public class PageAnalyzer {
             ImageIO.write(placeholder, "png", baos);
             return baos.toByteArray();
         } catch (Exception e) {
-            System.err.println("[PageAnalyzer] Error creating placeholder: " + e.getMessage());
+            logger.error("Error creating placeholder: {}", e.getMessage());
             return null;
         }
     }

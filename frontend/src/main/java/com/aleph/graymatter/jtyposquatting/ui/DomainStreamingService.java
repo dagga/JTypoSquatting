@@ -4,6 +4,8 @@ import com.aleph.graymatter.jtyposquatting.client.JTypoSquattingRestClient;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.util.HashMap;
@@ -17,6 +19,7 @@ import java.util.function.Consumer;
  * Service for managing domain streaming and updates
  */
 public class DomainStreamingService {
+    private static final Logger logger = LoggerFactory.getLogger(DomainStreamingService.class);
     private final JTypoSquattingRestClient restClient;
     private final Gson gson = new GsonBuilder().create();
     private final ExecutorService executorService;
@@ -30,6 +33,9 @@ public class DomainStreamingService {
     private final AtomicInteger activeCount = new AtomicInteger(0);
     private final AtomicInteger deadCount = new AtomicInteger(0);
     private final AtomicInteger totalCount = new AtomicInteger(0);
+
+    // Track processing state: true = actively being processed (orange), false = waiting (white)
+    private final Map<String, Boolean> processingState = new HashMap<>();
 
     // Callbacks
     private Consumer<DomainResultDTO> onDomainUpdate;
@@ -88,7 +94,7 @@ public class DomainStreamingService {
                             DomainResultDTO result = gson.fromJson(json, DomainResultDTO.class);
                             byte[] screenshot = result.getScreenshot();
                             if (screenshot != null) {
-                                System.out.println("[DomainStreamingService] Received: " + result.getDomain() + " screenshot=" + screenshot.length + " bytes");
+                                logger.debug("Received: {} screenshot={} bytes", result.getDomain(), screenshot.length);
                             }
 
                             if (!domainRowMap.containsKey(result.getDomain())) {
@@ -97,10 +103,12 @@ public class DomainStreamingService {
 
                                 if ("Testing...".equals(result.getStatus())) {
                                     testingDomainTimestamps.put(result.getDomain(), System.currentTimeMillis());
+                                    processingState.put(result.getDomain(), false); // Start as waiting (white)
                                     scheduleTimeoutCheck(result.getDomain());
                                 }
                             } else {
                                 testingDomainTimestamps.remove(result.getDomain());
+                                processingState.remove(result.getDomain());
                                 if ("Active".equals(result.getStatus())) activeCount.incrementAndGet();
                                 else if ("Dead".equals(result.getStatus())) deadCount.incrementAndGet();
                             }
@@ -148,13 +156,17 @@ public class DomainStreamingService {
         timeoutExecutor.schedule(() -> {
             // Only process if domain is still in testing state
             if (testingDomainTimestamps.containsKey(domain)) {
-                // Remove from tracking first
-                testingDomainTimestamps.remove(domain);
-                domainRowMap.remove(domain);
-                totalCount.decrementAndGet();
+                // Mark as processing (orange) - domain is being actively checked
+                processingState.put(domain, true);
                 
-                // Notify UI immediately on the EDT
-                SwingUtilities.invokeLater(() -> onDomainUpdate.accept(new DomainResultDTO(domain, "Timeout", "", "", "", 0, null, "", null)));
+                // Remove from testing timestamps but keep in domainRowMap (don't remove from grid)
+                testingDomainTimestamps.remove(domain);
+
+                // Notify UI immediately on the EDT - keep status as Testing... but it's now processing
+                SwingUtilities.invokeLater(() -> {
+                    DomainResultDTO processingUpdate = new DomainResultDTO(domain, "Testing...", "", "", "", -1, null, "", null);
+                    onDomainUpdate.accept(processingUpdate);
+                });
             }
         }, DOMAIN_TIMEOUT_MS, TimeUnit.MILLISECONDS);
     }
@@ -176,11 +188,12 @@ public class DomainStreamingService {
         // Clear all internal state
         domainRowMap.clear();
         testingDomainTimestamps.clear();
+        processingState.clear();
         activeCount.set(0);
         deadCount.set(0);
         totalCount.set(0);
-        
-        System.out.println("[DomainStreamingService] Reset complete");
+
+        logger.debug("Reset complete");
     }
 
     public void shutdown() {
@@ -211,5 +224,14 @@ public class DomainStreamingService {
 
     public int getTotalCount() {
         return totalCount.get();
+    }
+
+    /**
+     * Check if a domain is actively being processed (orange status) or waiting (white status).
+     * @param domain The domain to check
+     * @return true if processing (orange), false if waiting (white)
+     */
+    public boolean isProcessing(String domain) {
+        return processingState.getOrDefault(domain, false);
     }
 }

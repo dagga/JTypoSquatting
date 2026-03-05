@@ -5,7 +5,8 @@ import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
 import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -33,23 +34,23 @@ import java.util.concurrent.TimeUnit;
 @RequestMapping("/api")
 public class TypoSquattingController {
 
+    private static final Logger logger = LoggerFactory.getLogger(TypoSquattingController.class);
+
     private final DomainCheckService domainCheckService;
+    private final DatabaseService databaseService;
     private final ConcurrentHashMap<String, ExecutorService> activeSessions = new ConcurrentHashMap<>();
-    
-    // Virtual thread executor for parallel domain checks
-    // Each task runs in its own virtual thread, allowing hundreds of concurrent checks
+
     private final ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
-    public TypoSquattingController(DomainCheckService domainCheckService) {
+    public TypoSquattingController(DomainCheckService domainCheckService, DatabaseService databaseService) {
         this.domainCheckService = domainCheckService;
+        this.databaseService = databaseService;
     }
 
     @GetMapping(value = "/generate-and-check", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter generateAndCheckDomains(@RequestParam String domain) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
-        // Create a dedicated virtual thread executor for this SSE session
-        // Virtual threads allow hundreds of concurrent domain checks without thread pool tuning
         ExecutorService sessionExecutor = Executors.newVirtualThreadPerTaskExecutor();
         String sessionId = String.valueOf(System.identityHashCode(emitter));
         activeSessions.put(sessionId, sessionExecutor);
@@ -74,7 +75,6 @@ public class TypoSquattingController {
                 ArrayList<String> generatedDomains = jTypoSquatting.getListOfDomains();
 
                 // 2. Stream generated domains with "Testing..." status first
-                // HTTP code -1 indicates "in progress" (not 0 which means dead/unreachable)
                 for (String generatedDomain : generatedDomains) {
                     if (Thread.currentThread().isInterrupted()) {
                         break;
@@ -84,8 +84,7 @@ public class TypoSquattingController {
                     Thread.sleep(2);
                 }
 
-                // 3. Check domains in parallel using virtual threads
-                // Each domain check runs in its own virtual thread (I/O bound operation)
+                // 3. Check domains in parallel
                 java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
                 for (String generatedDomain : generatedDomains) {
                     if (Thread.currentThread().isInterrupted()) {
@@ -101,7 +100,7 @@ public class TypoSquattingController {
                                 sendSseEvent(emitter, finalResult);
                                 Thread.sleep(2);
                             } catch (IOException | InterruptedException e) {
-                                System.err.println("Error sending SSE event: " + e.getMessage());
+                                logger.error("Error sending SSE event: {}", e.getMessage());
                                 Thread.currentThread().interrupt();
                             }
                         }
@@ -109,16 +108,14 @@ public class TypoSquattingController {
                     futures.add(future);
                 }
 
-                // Wait for all checks to complete
                 for (java.util.concurrent.Future<?> future : futures) {
                     try {
                         future.get();
                     } catch (Exception e) {
-                        System.err.println("Error waiting for domain check: " + e.getMessage());
+                        logger.error("Error waiting for domain check: {}", e.getMessage());
                     }
                 }
 
-                // Complete the emitter after all checks are done
                 emitter.complete();
             } catch (FileNotFoundException e) {
                 sendErrorEvent(emitter, "Server error: Required files not found.");
@@ -129,7 +126,7 @@ public class TypoSquattingController {
                 sendErrorEvent(emitter, "Server interrupted.");
             } catch (Exception e) {
                 sendErrorEvent(emitter, "Internal server error: " + e.getMessage());
-                e.printStackTrace();
+                logger.error("Internal server error", e);
             }
         });
 
@@ -138,25 +135,24 @@ public class TypoSquattingController {
 
     @GetMapping("/cancel")
     public ResponseEntity<Void> cancelActiveAnalysis() {
-        System.out.println("[TypoSquattingController] Cancelling " + activeSessions.size() + " active session(s)...");
-        
-        // Shutdown all active session executors
+        logger.info("Cancelling {} active session(s)...", activeSessions.size());
+
         for (Map.Entry<String, ExecutorService> entry : activeSessions.entrySet()) {
             ExecutorService executor = entry.getValue();
             executor.shutdownNow();
             try {
                 if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
-                    System.out.println("[TypoSquattingController] Session " + entry.getKey() + " did not terminate gracefully");
+                    logger.warn("Session {} did not terminate gracefully", entry.getKey());
                 } else {
-                    System.out.println("[TypoSquattingController] Session " + entry.getKey() + " terminated");
+                    logger.info("Session {} terminated", entry.getKey());
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
         }
         activeSessions.clear();
-        
-        System.out.println("[TypoSquattingController] All sessions cancelled");
+
+        logger.info("All sessions cancelled");
         return ResponseEntity.ok().build();
     }
 
@@ -165,22 +161,26 @@ public class TypoSquattingController {
      * Called by frontend when user clicks "Clear" button.
      */
     @DeleteMapping("/cancel-and-clear")
-    public ResponseEntity<Void> cancelAndClear(@Autowired(required = false) DatabaseService databaseService) {
-        System.out.println("[TypoSquattingController] Cancel and clear requested");
-        
-        // First cancel all active sessions
+    public ResponseEntity<Void> cancelAndClear() {
+        logger.info("Cancel and clear requested");
+
         cancelActiveAnalysis();
-        
-        // Then clear database
+
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         if (databaseService != null) {
             try {
                 databaseService.deleteAll();
-                System.out.println("[TypoSquattingController] Database cleared");
+                logger.info("Database cleared");
             } catch (Exception e) {
-                System.err.println("[TypoSquattingController] Error clearing database: " + e.getMessage());
+                logger.error("Error clearing database: {}", e.getMessage());
             }
         }
-        
+
         return ResponseEntity.ok().build();
     }
 
@@ -188,7 +188,7 @@ public class TypoSquattingController {
         if (data instanceof DomainResultDTO) {
             DomainResultDTO dto = (DomainResultDTO) data;
             byte[] screenshot = dto.getScreenshot();
-            System.out.println("[TypoSquattingController] Sending SSE event for " + dto.getDomain() + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
+            logger.debug("Sending SSE event for {} with screenshot: {} bytes", dto.getDomain(), screenshot != null ? screenshot.length : 0);
         }
         emitter.send(SseEmitter.event()
                 .name("domainUpdate")
@@ -200,7 +200,7 @@ public class TypoSquattingController {
         try {
             emitter.send(SseEmitter.event().name("error").data(Collections.singletonMap("error", message)));
         } catch (IOException e) {
-            // Ignore
+            // no-op
         }
     }
 }

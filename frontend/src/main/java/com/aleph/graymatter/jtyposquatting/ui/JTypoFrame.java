@@ -6,6 +6,9 @@ import com.aleph.graymatter.jtyposquatting.config.ConfigManager;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.ui.renderers.FlagIconManager;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.awt.datatransfer.DataFlavor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Main application frame for JTypoSquatting tool that communicates via REST API using SSE
  */
 public class JTypoFrame extends JFrame {
+    private static final Logger logger = LoggerFactory.getLogger(JTypoFrame.class);
     private final JTextField jTextFieldInput;
     private final JTable jTableOutput;
     private final DefaultTableModel tableModel;
@@ -66,19 +70,19 @@ public class JTypoFrame extends JFrame {
 
         // Register shutdown hook to cleanup backend resources on application exit
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("[JTypoFrame] Application shutting down, cleaning up...");
+            logger.info("Application shutting down, cleaning up...");
             try {
                 // Cancel active analysis and clear backend database
                 restClient.cancelAndClear();
-                System.out.println("[JTypoFrame] Backend resources cleaned up");
+                logger.info("Backend resources cleaned up");
             } catch (Exception e) {
-                System.err.println("[JTypoFrame] Error during cleanup: " + e.getMessage());
+                logger.error("Error during cleanup: {}", e.getMessage());
             }
             // Shutdown streaming service
             streamingService.shutdown();
             // Shutdown executor service
             executorService.shutdownNow();
-            System.out.println("[JTypoFrame] Shutdown complete");
+            logger.info("Shutdown complete");
         }));
 
         try {
@@ -389,8 +393,9 @@ public class JTypoFrame extends JFrame {
     }
 
     private void processDomainUpdate(DomainResultDTO result) {
-        // Handle Unreachable domains - remove them from the list
-        if ("Unreachable".equals(result.getStatus())) {
+        // Remove domains only if HTTP code is 0 (unreachable/dead)
+        // Keep Testing... (-1) and Timeout domains in the grid
+        if (result.getHttpCode() == 0 && "Unreachable".equals(result.getStatus())) {
             // Search for the domain in the table by name
             int removeRow = -1;
             for (int i = 0; i < tableModel.getRowCount(); i++) {
@@ -412,6 +417,7 @@ public class JTypoFrame extends JFrame {
                 tableModel.removeRow(removeRow);
                 domainRowMap.remove(result.getDomain());
                 domainDataMap.remove(result.getDomain());
+                domainPriorityMap.remove(result.getDomain());
 
                 // Adjust row mappings for domains after the removed one
                 for (Map.Entry<String, Integer> entry : domainRowMap.entrySet()) {
@@ -426,51 +432,56 @@ public class JTypoFrame extends JFrame {
         // Store the full DTO for details view
             domainDataMap.put(result.getDomain(), result);
 
-            if ("Timeout".equals(result.getStatus())) {
-                // Search for the domain in the table by name
-                int removeRow = -1;
-                for (int i = 0; i < tableModel.getRowCount(); i++) {
-                    String domainName = (String) tableModel.getValueAt(i, 0);
-                    if (result.getDomain().equals(domainName)) {
-                        removeRow = i;
-                        break;
-                    }
-                }
+            // Timeout domains stay in the grid with Testing... status - do not remove them
+            // They will eventually get a real status update
 
-                if (removeRow != -1) {
-                    String removedStatus = (String) tableModel.getValueAt(removeRow, 1);
-                    if ("Suspicious".equals(removedStatus) || "Safe".equals(removedStatus)) {
-                        activeDomainCount.addAndGet(-1);
-                    } else if ("Testing...".equals(removedStatus)) {
-                        // Do not count Testing... domains in active/dead counts
-                    }
-
-                    tableModel.removeRow(removeRow);
-                    domainRowMap.remove(result.getDomain());
-                    domainDataMap.remove(result.getDomain());
-
-                    // Adjust row mappings for domains after the removed one
-                    for (Map.Entry<String, Integer> entry : domainRowMap.entrySet()) {
-                        if (entry.getValue() > removeRow) {
-                            domainRowMap.put(entry.getKey(), entry.getValue() - 1);
-                        }
-                    }
-                }
-            } else if (!domainRowMap.containsKey(result.getDomain())) {
-                // Add new domain (only if not Unreachable)
+            if (!domainRowMap.containsKey(result.getDomain())) {
                 totalGeneratedCount.addAndGet(1);
                 String flag = getFlagForLanguage(result.getLanguage());
-                tableModel.addRow(new Object[]{
-                        result.getDomain(),
-                        result.getStatus(),
-                        result.getTitle(),
-                        result.getLanguage(),
-                        flag,
-                        result.getDescription(),
-                        result.getHttpCode(),
-                        result.getScreenshot()
-                });
-                domainRowMap.put(result.getDomain(), tableModel.getRowCount() - 1);
+                
+                // Calculate priority for HTTP 200 domains
+                int priority = calculateDomainPriority(result);
+                
+                // Find insertion row based on priority
+                int insertRow = findInsertionRow(priority, result.getHttpCode());
+                
+                if (insertRow >= 0 && insertRow < tableModel.getRowCount()) {
+                    // Insert at specific position
+                    tableModel.insertRow(insertRow, new Object[]{
+                            result.getDomain(),
+                            result.getStatus(),
+                            result.getTitle(),
+                            result.getLanguage(),
+                            flag,
+                            result.getDescription(),
+                            result.getHttpCode(),
+                            result.getScreenshot()
+                    });
+                    domainRowMap.put(result.getDomain(), insertRow);
+                    domainPriorityMap.put(result.getDomain(), priority);
+                    
+                    // Update row mappings for domains after the inserted one
+                    for (Map.Entry<String, Integer> entry : domainRowMap.entrySet()) {
+                        if (!entry.getKey().equals(result.getDomain()) && entry.getValue() >= insertRow) {
+                            domainRowMap.put(entry.getKey(), entry.getValue() + 1);
+                        }
+                    }
+                } else {
+                    // Add at the end
+                    tableModel.addRow(new Object[]{
+                            result.getDomain(),
+                            result.getStatus(),
+                            result.getTitle(),
+                            result.getLanguage(),
+                            flag,
+                            result.getDescription(),
+                            result.getHttpCode(),
+                            result.getScreenshot()
+                    });
+                    domainRowMap.put(result.getDomain(), tableModel.getRowCount() - 1);
+                    domainPriorityMap.put(result.getDomain(), priority);
+                }
+                
                 jTableOutput.revalidate();
                 jTableOutput.repaint();
                 if ("Suspicious".equals(result.getStatus()) || "Safe".equals(result.getStatus())) {
@@ -540,6 +551,71 @@ public class JTypoFrame extends JFrame {
             jGenerateButton.setText(config.getMessage("button.generate"));
         });
     }
+
+    /**
+     * Calculate priority for a domain based on HTTP code and content availability.
+     * Lower number = higher priority (inserted first in the table).
+     * 
+     * Priority order for HTTP 200:
+     * 1. Title + Description + Data (priority 1)
+     * 2. Title + Description (priority 2)
+     * 3. Title only (priority 3)
+     * 4. Data only (priority 4)
+     * 5. Other HTTP 200 (priority 5)
+     * 
+     * Non-HTTP 200 domains get priority 10 (inserted last).
+     */
+    private int calculateDomainPriority(DomainResultDTO result) {
+        // Only HTTP 200 (Suspicious) domains get special priority
+        if (!"Suspicious".equals(result.getStatus())) {
+            return 10;
+        }
+        
+        boolean hasTitle = result.getTitle() != null && !result.getTitle().trim().isEmpty();
+        boolean hasDescription = result.getDescription() != null && !result.getDescription().trim().isEmpty();
+        boolean hasData = (result.getHomepageText() != null && !result.getHomepageText().trim().isEmpty()) ||
+                         (result.getHttpHeaders() != null && !result.getHttpHeaders().isEmpty());
+        
+        if (hasTitle && hasDescription && hasData) {
+            return 1; // Highest priority: Title + Description + Data
+        } else if (hasTitle && hasDescription) {
+            return 2; // Title + Description
+        } else if (hasTitle) {
+            return 3; // Title only
+        } else if (hasData) {
+            return 4; // Data only
+        } else {
+            return 5; // Other HTTP 200
+        }
+    }
+
+    /**
+     * Find the row where a new domain should be inserted based on its priority.
+     * Domains are sorted by priority (lowest first), then by HTTP code (200 first).
+     */
+    private int findInsertionRow(int newPriority, int newHttpCode) {
+        // If table is empty, insert at row 0
+        if (tableModel.getRowCount() == 0) {
+            return 0;
+        }
+        
+        // Find the first row where the existing priority is higher (worse) than the new one
+        for (int row = 0; row < tableModel.getRowCount(); row++) {
+            int modelRow = jTableOutput.convertRowIndexToModel(row);
+            String existingDomain = (String) tableModel.getValueAt(modelRow, 0);
+            Integer existingPriority = domainPriorityMap.get(existingDomain);
+            
+            if (existingPriority == null || newPriority < existingPriority) {
+                return row;
+            }
+        }
+        
+        // Insert at the end if no suitable position found
+        return -1;
+    }
+
+    // Map to store domain priorities
+    private final Map<String, Integer> domainPriorityMap = new HashMap<>();
 
     private void sortTableByStatus() {
         TableRowSorter<DefaultTableModel> sorter = (TableRowSorter<DefaultTableModel>) jTableOutput.getRowSorter();
@@ -614,42 +690,43 @@ public class JTypoFrame extends JFrame {
     }
 
     private void clearAll() {
-        System.out.println("[JTypoFrame] Clearing all data...");
-        
+        logger.debug("Clearing all data...");
+
         // Stop any active generation/streaming and clear backend in one call
         executorService.submit(() -> {
             // Use combined cancel and clear endpoint
             restClient.cancelAndClear();
-            System.out.println("[JTypoFrame] Backend cancel and clear requested");
+            logger.debug("Backend cancel and clear requested");
         });
 
         // Reset streaming service
         streamingService.reset();
-        
+
         // Clear table model
         tableModel.setRowCount(0);
-        
+
         // Clear row sorter if exists
         RowSorter<?> sorter = jTableOutput.getRowSorter();
         if (sorter != null) {
             sorter.setSortKeys(null);
         }
-        
+
         // Clear internal maps
         domainRowMap.clear();
         domainDataMap.clear();
-        
+        domainPriorityMap.clear();
+
         // Clear preview
         previewPanel.clearPreview();
-        
+
         // Reset counters
         activeDomainCount.set(0);
         deadDomainCount.set(0);
         totalGeneratedCount.set(0);
-        
+
         // Update console message
         jTextFieldConsole.setText(config.getMessage("console.ready"));
-        
+
         // Clear log panels and stop tailers
         if (backendLogPanel != null) {
             backendLogPanel.stop();
@@ -663,8 +740,8 @@ public class JTypoFrame extends JFrame {
         // Re-enable generate button
         jGenerateButton.setEnabled(true);
         jGenerateButton.setText(config.getMessage("button.generate"));
-        
-        System.out.println("[JTypoFrame] Clear complete");
+
+        logger.debug("Clear complete");
     }
 
     private void pasteDomains() {
@@ -742,24 +819,40 @@ public class JTypoFrame extends JFrame {
 
     private class CustomStatusLedRenderer extends JLabel implements TableCellRenderer {
         private static final int LED_SIZE = 20;
-        public CustomStatusLedRenderer() { 
-            setHorizontalAlignment(JLabel.CENTER); 
-            setOpaque(true); 
+        public CustomStatusLedRenderer() {
+            setHorizontalAlignment(JLabel.CENTER);
+            setOpaque(true);
         }
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
             String status = (String) value;
             Color ledColor;
             Color bgColor;
+            
+            // Get domain to check processing state
+            int modelRow = table.convertRowIndexToModel(row);
+            Object domainObj = table.getModel().getValueAt(modelRow, 0);
+            String domain = domainObj != null ? domainObj.toString() : "";
+            
+            // Check if domain is actively being processed
+            boolean isProcessing = streamingService.isProcessing(domain);
+            
             if ("Suspicious".equals(status)) {
                 ledColor = new Color(255, 80, 80);
                 bgColor = new Color(255, 220, 220);
             } else if ("Safe".equals(status)) {
                 ledColor = new Color(100, 200, 100);
                 bgColor = new Color(220, 255, 220);
-            } else if ("Checking".equals(status) || "Testing...".equals(status)) {
-                ledColor = new Color(255, 165, 0);
-                bgColor = new Color(255, 240, 200);
+            } else if ("Testing...".equals(status)) {
+                if (isProcessing) {
+                    // Actively being processed - orange
+                    ledColor = new Color(255, 165, 0);
+                    bgColor = new Color(255, 240, 200);
+                } else {
+                    // Waiting for processing - white
+                    ledColor = new Color(240, 240, 240);
+                    bgColor = new Color(250, 250, 250);
+                }
             } else {
                 ledColor = new Color(200, 200, 200);
                 bgColor = Color.WHITE;
@@ -770,7 +863,6 @@ public class JTypoFrame extends JFrame {
             setIcon(new LedIcon(ledColor, LED_SIZE));
 
             // Get HTTP code from model (column 6)
-            int modelRow = table.convertRowIndexToModel(row);
             Object httpCodeObj = table.getModel().getValueAt(modelRow, 6);
             String httpCodeStr = "";
             if (httpCodeObj != null) {
