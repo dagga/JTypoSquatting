@@ -14,6 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Integration tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
+ * 
+ * Note: These tests require a display for JavaFX screenshot capture.
+ * In headless CI environments, use Xvfb or set DISPLAY environment variable.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -202,7 +205,7 @@ class PageAnalyzerIntegrationTest {
         var persistedScreenshot = dbData.stream()
             .filter(d -> TEST_DOMAIN.equals(d.getDomain()))
             .findFirst()
-            .map(d -> d.getScreenshot())
+            .map(DomainPageDTO::getScreenshot)
             .orElse(null);
 
         assertNotNull(persistedScreenshot, "Screenshot should be persisted in database");
