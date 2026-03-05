@@ -2,6 +2,9 @@ package com.aleph.graymatter.jtyposquatting.ui;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
+import java.io.ByteArrayInputStream;
 
 /**
  * Panel for displaying page preview thumbnail
@@ -23,14 +26,11 @@ public class PreviewPanel extends JPanel {
     public void updatePreview(String domain, byte[] screenshot) {
         if (screenshot != null && screenshot.length > 0) {
             try {
-                ImageIcon icon = new ImageIcon(screenshot);
-
-                MediaTracker tracker = new MediaTracker(thumbnailLabel);
-                tracker.addImage(icon.getImage(), 0);
-                tracker.waitForID(0, 5000);
-
-                if (!tracker.isErrorID(0)) {
-                    Image img = icon.getImage();
+                // Try to load image from byte array using ImageIO
+                BufferedImage img = ImageIO.read(new ByteArrayInputStream(screenshot));
+                
+                if (img != null) {
+                    // Scale the image
                     Image scaledImg = img.getScaledInstance(320, 240, Image.SCALE_SMOOTH);
                     ImageIcon scaledIcon = new ImageIcon(scaledImg);
 
@@ -43,7 +43,7 @@ public class PreviewPanel extends JPanel {
                     return;
                 }
             } catch (Exception e) {
-                e.printStackTrace();
+                System.err.println("[PreviewPanel] Error loading screenshot: " + e.getMessage());
             }
         }
 

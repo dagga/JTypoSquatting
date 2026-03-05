@@ -2,10 +2,13 @@ package com.aleph.graymatter.jtyposquatting.controller;
 
 import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
+import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,9 +19,11 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * REST controller for typo squatting domain generation and checking.
@@ -133,15 +138,58 @@ public class TypoSquattingController {
 
     @GetMapping("/cancel")
     public ResponseEntity<Void> cancelActiveAnalysis() {
+        System.out.println("[TypoSquattingController] Cancelling " + activeSessions.size() + " active session(s)...");
+        
         // Shutdown all active session executors
-        for (ExecutorService executor : activeSessions.values()) {
+        for (Map.Entry<String, ExecutorService> entry : activeSessions.entrySet()) {
+            ExecutorService executor = entry.getValue();
             executor.shutdownNow();
+            try {
+                if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    System.out.println("[TypoSquattingController] Session " + entry.getKey() + " did not terminate gracefully");
+                } else {
+                    System.out.println("[TypoSquattingController] Session " + entry.getKey() + " terminated");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
         }
         activeSessions.clear();
+        
+        System.out.println("[TypoSquattingController] All sessions cancelled");
+        return ResponseEntity.ok().build();
+    }
+
+    /**
+     * Cancel all active analysis and clear database.
+     * Called by frontend when user clicks "Clear" button.
+     */
+    @DeleteMapping("/cancel-and-clear")
+    public ResponseEntity<Void> cancelAndClear(@Autowired(required = false) DatabaseService databaseService) {
+        System.out.println("[TypoSquattingController] Cancel and clear requested");
+        
+        // First cancel all active sessions
+        cancelActiveAnalysis();
+        
+        // Then clear database
+        if (databaseService != null) {
+            try {
+                databaseService.deleteAll();
+                System.out.println("[TypoSquattingController] Database cleared");
+            } catch (Exception e) {
+                System.err.println("[TypoSquattingController] Error clearing database: " + e.getMessage());
+            }
+        }
+        
         return ResponseEntity.ok().build();
     }
 
     private void sendSseEvent(SseEmitter emitter, Object data) throws IOException {
+        if (data instanceof DomainResultDTO) {
+            DomainResultDTO dto = (DomainResultDTO) data;
+            byte[] screenshot = dto.getScreenshot();
+            System.out.println("[TypoSquattingController] Sending SSE event for " + dto.getDomain() + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
+        }
         emitter.send(SseEmitter.event()
                 .name("domainUpdate")
                 .data(data, MediaType.APPLICATION_JSON)

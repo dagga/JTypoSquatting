@@ -64,7 +64,22 @@ public class JTypoFrame extends JFrame {
         streamingService = new DomainStreamingService(restClient);
         executorService = Executors.newSingleThreadExecutor();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(streamingService::shutdown));
+        // Register shutdown hook to cleanup backend resources on application exit
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("[JTypoFrame] Application shutting down, cleaning up...");
+            try {
+                // Cancel active analysis and clear backend database
+                restClient.cancelAndClear();
+                System.out.println("[JTypoFrame] Backend resources cleaned up");
+            } catch (Exception e) {
+                System.err.println("[JTypoFrame] Error during cleanup: " + e.getMessage());
+            }
+            // Shutdown streaming service
+            streamingService.shutdown();
+            // Shutdown executor service
+            executorService.shutdownNow();
+            System.out.println("[JTypoFrame] Shutdown complete");
+        }));
 
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
@@ -579,14 +594,14 @@ public class JTypoFrame extends JFrame {
 
         int modelRow = jTableOutput.convertRowIndexToModel(selectedRow);
         String domain = (String) tableModel.getValueAt(modelRow, 0);
-        
+
         // Get domain data from the map instead of directly from table (more reliable)
         DomainResultDTO domainData = domainDataMap.get(domain);
         byte[] screenshot = null;
         if (domainData != null) {
             screenshot = domainData.getScreenshot();
         }
-        
+
         // Fallback to table value if map entry not found
         if (screenshot == null) {
             Object screenshotObj = tableModel.getValueAt(modelRow, 7);
@@ -594,30 +609,47 @@ public class JTypoFrame extends JFrame {
                 screenshot = (byte[]) screenshotObj;
             }
         }
-        
+
         previewPanel.updatePreview(domain, screenshot);
     }
 
     private void clearAll() {
-        // Stop any active generation/streaming
+        System.out.println("[JTypoFrame] Clearing all data...");
+        
+        // Stop any active generation/streaming and clear backend in one call
         executorService.submit(() -> {
-            try {
-                restClient.cancelActiveAnalysis();
-                restClient.clearAllCachedData();
-            } catch (Exception e) {
-                // Ignore clearing errors
-            }
+            // Use combined cancel and clear endpoint
+            restClient.cancelAndClear();
+            System.out.println("[JTypoFrame] Backend cancel and clear requested");
         });
 
-        // Clear UI
+        // Reset streaming service
+        streamingService.reset();
+        
+        // Clear table model
         tableModel.setRowCount(0);
+        
+        // Clear row sorter if exists
+        RowSorter<?> sorter = jTableOutput.getRowSorter();
+        if (sorter != null) {
+            sorter.setSortKeys(null);
+        }
+        
+        // Clear internal maps
         domainRowMap.clear();
         domainDataMap.clear();
+        
+        // Clear preview
         previewPanel.clearPreview();
+        
+        // Reset counters
         activeDomainCount.set(0);
         deadDomainCount.set(0);
         totalGeneratedCount.set(0);
-
+        
+        // Update console message
+        jTextFieldConsole.setText(config.getMessage("console.ready"));
+        
         // Clear log panels and stop tailers
         if (backendLogPanel != null) {
             backendLogPanel.stop();
@@ -628,9 +660,11 @@ public class JTypoFrame extends JFrame {
             frontendLogPanel.clearLogs();
         }
 
-        jTextFieldConsole.setText(config.getMessage("console.ready"));
+        // Re-enable generate button
         jGenerateButton.setEnabled(true);
         jGenerateButton.setText(config.getMessage("button.generate"));
+        
+        System.out.println("[JTypoFrame] Clear complete");
     }
 
     private void pasteDomains() {

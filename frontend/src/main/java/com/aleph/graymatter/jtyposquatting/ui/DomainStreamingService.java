@@ -86,6 +86,10 @@ public class DomainStreamingService {
 
                         while (batch < BATCH_SIZE && (json = eventQueue.poll()) != null) {
                             DomainResultDTO result = gson.fromJson(json, DomainResultDTO.class);
+                            byte[] screenshot = result.getScreenshot();
+                            if (screenshot != null) {
+                                System.out.println("[DomainStreamingService] Received: " + result.getDomain() + " screenshot=" + screenshot.length + " bytes");
+                            }
 
                             if (!domainRowMap.containsKey(result.getDomain())) {
                                 domainRowMap.put(result.getDomain(), totalCount.get());
@@ -163,6 +167,20 @@ public class DomainStreamingService {
             } catch (Exception ignored) {}
             activeStreamHandle = null;
         }
+    }
+
+    public void reset() {
+        // Cancel any active stream
+        cancelActiveStreamIfAny();
+        
+        // Clear all internal state
+        domainRowMap.clear();
+        testingDomainTimestamps.clear();
+        activeCount.set(0);
+        deadCount.set(0);
+        totalCount.set(0);
+        
+        System.out.println("[DomainStreamingService] Reset complete");
     }
 
     public void shutdown() {

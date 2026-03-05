@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.dto;
 
+import com.google.gson.annotations.SerializedName;
 import java.io.Serializable;
 import java.util.Base64;
 import java.util.Map;
@@ -14,8 +15,13 @@ public class DomainResultDTO implements Serializable {
     private String language;
     private String description;
     private int httpCode;
+    
+    @SerializedName("screenshotBase64")
     private String screenshotBase64;
+    
+    @SerializedName(value = "screenshot", alternate = "screenshotBase64")
     private transient byte[] screenshot;
+    
     private String homepageText;
     private Map<String, String> httpHeaders;
 
@@ -84,6 +90,14 @@ public class DomainResultDTO implements Serializable {
     }
 
     public byte[] getScreenshot() {
+        // Decode from base64 if screenshot is null but screenshotBase64 is set
+        if (screenshot == null && screenshotBase64 != null && !screenshotBase64.isEmpty()) {
+            try {
+                screenshot = Base64.getDecoder().decode(screenshotBase64);
+            } catch (IllegalArgumentException e) {
+                screenshot = null;
+            }
+        }
         return screenshot;
     }
 
@@ -126,7 +140,7 @@ public class DomainResultDTO implements Serializable {
                 ", language='" + language + '\'' +
                 ", description='" + description + '\'' +
                 ", httpCode=" + httpCode +
-                ", screenshotSize=" + (screenshot != null ? screenshot.length : 0) +
+                ", screenshotSize=" + (getScreenshot() != null ? getScreenshot().length : 0) +
                 '}';
     }
 }

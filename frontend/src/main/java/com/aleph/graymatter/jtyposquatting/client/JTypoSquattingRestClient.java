@@ -244,6 +244,24 @@ public class JTypoSquattingRestClient {
     }
 
     /**
+     * Cancel all active analysis and clear database in one call.
+     * This is more efficient than calling cancel() and clearAllCachedData() separately.
+     */
+    public void cancelAndClear() {
+        try {
+            URL url = new URL(baseUrl + "/api/cancel-and-clear");
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("DELETE");
+            connection.setConnectTimeout(5000);
+            int responseCode = connection.getResponseCode();
+            System.out.println("[RestClient] Cancel and clear response: " + responseCode);
+        } catch (Exception e) {
+            // Ignore errors - backend will still process what it can
+            System.err.println("[RestClient] Error during cancel and clear: " + e.getMessage());
+        }
+    }
+
+    /**
      * Cancel active analysis on backend
      */
     public void cancelActiveAnalysis() {

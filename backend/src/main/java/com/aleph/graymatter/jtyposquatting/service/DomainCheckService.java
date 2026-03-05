@@ -44,6 +44,9 @@ public class DomainCheckService {
                 // Other HTTP codes -> Safe (Green)
                 String status = (pageData.getHttpCode() == 200) ? "Suspicious" : "Safe";
 
+                byte[] screenshot = pageData.getScreenshot();
+                System.out.println("[DomainCheck] Sending result for " + domain + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
+
                 return new DomainResultDTO(
                         domain,
                         status,
@@ -51,7 +54,7 @@ public class DomainCheckService {
                         pageData.getDetectedLanguage(),
                         description,
                         pageData.getHttpCode(),
-                        pageData.getScreenshot(),
+                        screenshot,
                         pageData.getHomepageText(),
                         pageData.getHttpHeaders()
                 );
