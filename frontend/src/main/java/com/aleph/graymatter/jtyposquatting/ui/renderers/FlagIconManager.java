@@ -3,44 +3,27 @@ package com.aleph.graymatter.jtyposquatting.ui.renderers;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.awt.GraphicsEnvironment;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Manager for flag icons.
- * Generates and caches flag icons from emoji characters to avoid font dependency issues.
+ * Generates and caches flag icons as colored labels with language codes.
+ * This approach avoids font/emoji dependency issues.
  */
 public class FlagIconManager {
     
     private static final FlagIconManager INSTANCE = new FlagIconManager();
     private final Map<String, ImageIcon> iconCache = new HashMap<>();
-    private final Font emojiFont;
+    private final Map<String, Color> languageColors;
     
     private FlagIconManager() {
-        // Try to find a font that supports emoji flags
-        Font foundFont = null;
-        String[] emojiFontNames = {
-            "Segoe UI Emoji",      // Windows
-            "Apple Color Emoji",   // macOS
-            "Noto Color Emoji",    // Linux with Noto fonts
-            "EmojiOne",           // Some Linux systems
-            "Twemoji",            // Some systems
-            "Symbola",            // Fallback symbol font
-            "DejaVu Sans",        // Common Linux font
-            "Arial Unicode MS"    // Older Unicode font
-        };
-        
-        for (String fontName : emojiFontNames) {
-            Font font = new Font(fontName, Font.PLAIN, 32);
-            // Check if font is available
-            if (font.getFamily().equalsIgnoreCase(fontName)) {
-                foundFont = font;
-                break;
-            }
-        }
-        
-        // Fallback to default font if no emoji font found
-        this.emojiFont = foundFont != null ? foundFont : new Font("Dialog", Font.PLAIN, 32);
+        // Initialize language colors for visual distinction
+        languageColors = new HashMap<>();
+        initLanguageColors();
         
         // Pre-cache common flags
         preCacheFlags();
@@ -50,160 +33,111 @@ public class FlagIconManager {
         return INSTANCE;
     }
     
+    private void initLanguageColors() {
+        // Assign distinct colors to common languages
+        languageColors.put("ENGLISH", new Color(65, 105, 225));    // Royal Blue
+        languageColors.put("FRENCH", new Color(0, 38, 148));       // French Blue
+        languageColors.put("GERMAN", new Color(221, 0, 0));        // Red
+        languageColors.put("SPANISH", new Color(255, 191, 0));     // Yellow
+        languageColors.put("ITALIAN", new Color(0, 140, 68));      // Green
+        languageColors.put("PORTUGUESE", new Color(0, 102, 0));    // Dark Green
+        languageColors.put("DUTCH", new Color(255, 66, 0));        // Orange
+        languageColors.put("RUSSIAN", new Color(0, 57, 166));      // Russian Blue
+        languageColors.put("CHINESE", new Color(238, 28, 37));     // Chinese Red
+        languageColors.put("JAPANESE", new Color(186, 12, 47));    // Japanese Red
+        languageColors.put("KOREAN", new Color(0, 56, 168));       // Korean Blue
+        languageColors.put("ARABIC", new Color(0, 122, 51));       // Green
+        languageColors.put("UNKNOWN", new Color(128, 128, 128));   // Gray
+    }
+    
     private void preCacheFlags() {
-        // Pre-cache commonly used flags
-        getFlagIcon("🇬🇧"); // English
-        getFlagIcon("🇫🇷"); // French
-        getFlagIcon("🇩🇪"); // German
-        getFlagIcon("🇪🇸"); // Spanish
-        getFlagIcon("🇮🇹"); // Italian
-        getFlagIcon("🇵🇹"); // Portuguese
-        getFlagIcon("🇳🇱"); // Dutch
-        getFlagIcon("🇷🇺"); // Russian
-        getFlagIcon("🇨🇳"); // Chinese
-        getFlagIcon("🇯🇵"); // Japanese
-        getFlagIcon("🇰🇷"); // Korean
-        getFlagIcon("🇸🇦"); // Arabic
-        getFlagIcon("🌐");  // Default/Unknown
+        // Pre-cache commonly used language icons
+        getFlagIconForLanguage("ENGLISH");
+        getFlagIconForLanguage("FRENCH");
+        getFlagIconForLanguage("GERMAN");
+        getFlagIconForLanguage("SPANISH");
+        getFlagIconForLanguage("ITALIAN");
+        getFlagIconForLanguage("UNKNOWN");
     }
     
     /**
      * Get or create a flag icon from an emoji character.
-     * @param flagEmoji The flag emoji (e.g., "🇬🇧") or language code
+     * @param flagEmoji The flag emoji (not used in this implementation)
      * @return ImageIcon containing the flag
      */
     public ImageIcon getFlagIcon(String flagEmoji) {
-        if (flagEmoji == null || flagEmoji.isEmpty()) {
-            flagEmoji = "🌐";
-        }
-        
-        // Check cache first
-        ImageIcon cached = iconCache.get(flagEmoji);
-        if (cached != null) {
-            return cached;
-        }
-        
-        // Generate icon from emoji
-        ImageIcon icon = createIconFromEmoji(flagEmoji);
-        iconCache.put(flagEmoji, icon);
-        return icon;
+        // For backward compatibility, return default icon
+        return getFlagIconForLanguage("UNKNOWN");
     }
     
     /**
      * Get flag icon for a language name or code.
+     * Creates a colored rectangle with the language code.
      * @param language Language name (e.g., "ENGLISH", "FRENCH") or code (e.g., "EN", "FR")
      * @return ImageIcon containing the flag
      */
     public ImageIcon getFlagIconForLanguage(String language) {
         if (language == null || language.isEmpty()) {
-            return getFlagIcon("🌐");
+            language = "UNKNOWN";
         }
         
-        String lang = language.toUpperCase().trim();
-        String flagEmoji = getFlagEmojiForLanguage(lang);
-        return getFlagIcon(flagEmoji);
-    }
-    
-    /**
-     * Map language codes/names to flag emojis.
-     */
-    private String getFlagEmojiForLanguage(String lang) {
-        return switch (lang) {
-            // European Languages
-            case "ENGLISH", "EN" -> "🇬🇧";
-            case "FRENCH", "FR" -> "🇫🇷";
-            case "GERMAN", "DE" -> "🇩🇪";
-            case "SPANISH", "ES" -> "🇪🇸";
-            case "ITALIAN", "IT" -> "🇮🇹";
-            case "PORTUGUESE", "PT" -> "🇵🇹";
-            case "DUTCH", "NL" -> "🇳🇱";
-            case "RUSSIAN", "RU" -> "🇷🇺";
-            case "POLISH", "PL" -> "🇵🇱";
-            case "TURKISH", "TR" -> "🇹🇷";
-            case "SWEDISH", "SV" -> "🇸🇪";
-            case "NORWEGIAN", "NO", "NORWEGIAN_N", "NORWEGIAN_B" -> "🇳🇴";
-            case "DANISH", "DA" -> "🇩🇰";
-            case "FINNISH", "FI" -> "🇫🇮";
-            case "CZECH", "CS" -> "🇨🇿";
-            case "GREEK", "EL" -> "🇬🇷";
-            case "ROMANIAN", "RO" -> "🇷🇴";
-            case "HUNGARIAN", "HU" -> "🇭🇺";
-            case "UKRAINIAN", "UK" -> "🇺🇦";
-            case "BULGARIAN", "BG" -> "🇧🇬";
-            case "CROATIAN", "HR" -> "🇭🇷";
-            case "SERBIAN", "SR" -> "🇷🇸";
-            case "SLOVAK", "SK" -> "🇸🇰";
-            case "SLOVENIAN", "SL" -> "🇸🇮";
-            case "LITHUANIAN", "LT" -> "🇱🇹";
-            case "LATVIAN", "LV" -> "🇱🇻";
-            case "ESTONIAN", "ET" -> "🇪🇪";
-            case "ALBANIAN", "SQ" -> "🇦🇱";
-            case "MACEDONIAN", "MK" -> "🇲🇰";
-            case "BOSNIAN", "BS" -> "🇧🇦";
-            
-            // Asian Languages
-            case "CHINESE", "ZH" -> "🇨🇳";
-            case "JAPANESE", "JA" -> "🇯🇵";
-            case "KOREAN", "KO" -> "🇰🇷";
-            case "ARABIC", "AR" -> "🇸🇦";
-            case "HINDI", "HI" -> "🇮🇳";
-            case "THAI", "TH" -> "🇹🇭";
-            case "VIETNAMESE", "VI" -> "🇻🇳";
-            case "INDONESIAN", "ID" -> "🇮🇩";
-            case "MALAY", "MS" -> "🇲🇾";
-            case "TAGALOG", "TL" -> "🇵🇭";
-            
-            // Other Languages
-            case "HEBREW", "HE" -> "🇮🇱";
-            case "PERSIAN", "FA" -> "🇮🇷";
-            case "URDU", "UR" -> "🇵🇰";
-            case "BENGALI", "BN" -> "🇧🇩";
-            case "TAMIL", "TA" -> "🇮🇳";
-            case "TELUGU", "TE" -> "🇮🇳";
-            case "MARATHI", "MR" -> "🇮🇳";
-            case "GUJARATI", "GU" -> "🇮🇳";
-            case "KANNADA", "KN" -> "🇮🇳";
-            case "MALAYALAM", "ML" -> "🇮🇳";
-            case "PUNJABI", "PA" -> "🇮🇳";
-            case "SWAHILI", "SW" -> "🇰🇪";
-            case "AFRIKAANS", "AF" -> "🇿🇦";
-            case "ZULU", "ZU" -> "🇿🇦";
-            case "XIOSA", "XH" -> "🇿🇦";
-            
-            // Default
-            default -> "🌐";
-        };
-    }
-    
-    /**
-     * Create an ImageIcon from an emoji character by rendering it to a BufferedImage.
-     */
-    private ImageIcon createIconFromEmoji(String emoji) {
-        int size = 32;
+        String langKey = language.toUpperCase().trim();
         
-        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        // Check cache first
+        ImageIcon cached = iconCache.get(langKey);
+        if (cached != null) {
+            return cached;
+        }
+        
+        // Generate icon
+        ImageIcon icon = createLanguageIcon(langKey);
+        iconCache.put(langKey, icon);
+        return icon;
+    }
+    
+    /**
+     * Create an icon showing the language code with a colored background.
+     */
+    private ImageIcon createLanguageIcon(String language) {
+        int width = 45;
+        int height = 26;
+        
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2d = image.createGraphics();
         
-        // Enable anti-aliasing for smoother rendering
+        // Enable anti-aliasing
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
         g2d.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_LCD_HRGB);
         
-        // Clear background
-        g2d.setColor(new Color(0, 0, 0, 0));
-        g2d.fillRect(0, 0, size, size);
+        // Get color for this language
+        Color langColor = languageColors.get(language);
+        if (langColor == null) {
+            langColor = languageColors.get("UNKNOWN");
+        }
         
-        // Set font and color
-        g2d.setFont(emojiFont);
-        g2d.setColor(Color.BLACK);
+        // Draw rounded rectangle background
+        g2d.setColor(langColor);
+        g2d.fillRoundRect(2, 2, width - 4, height - 4, 6, 6);
         
-        // Center the emoji
+        // Draw border
+        g2d.setColor(langColor.darker());
+        g2d.setStroke(new BasicStroke(1.5f));
+        g2d.drawRoundRect(2, 2, width - 4, height - 4, 6, 6);
+        
+        // Get language code (first 2 letters)
+        String code = language.length() >= 2 ? language.substring(0, 2).toUpperCase() : language;
+        
+        // Draw language code in white
+        g2d.setColor(Color.WHITE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 14));
+        
         FontMetrics fm = g2d.getFontMetrics();
-        int x = (size - fm.charWidth(emoji.charAt(0))) / 2;
-        int y = ((size - fm.getHeight()) / 2) + fm.getAscent();
+        int textWidth = fm.stringWidth(code);
+        int textHeight = fm.getHeight();
+        int x = (width - textWidth) / 2;
+        int y = (height - textHeight) / 2 + fm.getAscent();
         
-        // Draw the emoji
-        g2d.drawString(emoji, x, y);
+        g2d.drawString(code, x, y);
         g2d.dispose();
         
         return new ImageIcon(image);
