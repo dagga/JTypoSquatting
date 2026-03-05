@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
-import javax.swing.ImageIcon;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
@@ -21,7 +20,6 @@ import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import javax.swing.KeyStroke;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
