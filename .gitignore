@@ -2,6 +2,12 @@
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
+.gradle
+/build/
+/frontend/build/
+/backend/build
+/dist/
+.idea
 
 ### Eclipse ###
 .apt_generated
