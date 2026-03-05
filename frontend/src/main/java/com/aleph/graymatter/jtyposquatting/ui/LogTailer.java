@@ -54,64 +54,68 @@ public class LogTailer {
             // ignore initial read
         }
 
-        ScheduledExecutorService logExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+        try (ScheduledExecutorService logExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "LogTailer");
             t.setDaemon(true);
             return t;
-        });
+        })) {
 
-        // Increased interval from 500ms to 1000ms to reduce CPU usage
-        future = logExecutor.scheduleWithFixedDelay(() -> {
-            try {
-                if (!java.nio.file.Files.exists(path)) return;
-                long len = java.nio.file.Files.size(path);
-                if (len < lastPos) {
-                    // rotated
-                    lastPos = 0;
-                }
-                if (len > lastPos) {
-                    try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(path.toFile(), "r")) {
-                        raf.seek(lastPos);
-                        String line;
-                        java.util.List<String> newLines = new java.util.ArrayList<>();
-                        int lineCount = 0;
-                        while ((line = raf.readLine()) != null && lineCount < 100) { // Limit to 100 lines per read
-                            lineCount++;
-                            newLines.add(new String(line.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), java.nio.charset.StandardCharsets.UTF_8));
-                        }
-                        lastPos = raf.getFilePointer();
-                        if (!newLines.isEmpty()) {
-                            boolean trimmed = false;
-                            synchronized (lock) {
-                                for (String l : newLines) buffer.addLast(l);
-                                while (buffer.size() > maxLines) {
-                                    buffer.removeFirst();
-                                    trimmed = true;
-                                }
+            // Increased interval from 500ms to 1000ms to reduce CPU usage
+            future = logExecutor.scheduleWithFixedDelay(() -> {
+                try {
+                    if (!java.nio.file.Files.exists(path)) return;
+                    long len = java.nio.file.Files.size(path);
+                    if (len < lastPos) {
+                        // rotated
+                        lastPos = 0;
+                    }
+                    if (len > lastPos) {
+                        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(path.toFile(), "r")) {
+                            raf.seek(lastPos);
+                            String line;
+                            java.util.List<String> newLines = new java.util.ArrayList<>();
+                            int lineCount = 0;
+                            while ((line = raf.readLine()) != null && lineCount < 100) { // Limit to 100 lines per read
+                                lineCount++;
+                                newLines.add(new String(line.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), java.nio.charset.StandardCharsets.UTF_8));
                             }
-                            if (trimmed) {
-                                // Build full text in background
-                                String full;
+                            lastPos = raf.getFilePointer();
+                            if (!newLines.isEmpty()) {
+                                boolean trimmed = false;
                                 synchronized (lock) {
-                                    full = String.join("\n", buffer);
+                                    for (String l : newLines) buffer.addLast(l);
+                                    while (buffer.size() > maxLines) {
+                                        buffer.removeFirst();
+                                        trimmed = true;
+                                    }
                                 }
-                                final String out = full;
-                                SwingUtilities.invokeLater(() -> {
-                                    textArea.setText(out);
-                                    if (followCheck.isSelected()) textArea.setCaretPosition(textArea.getDocument().getLength());
-                                });
-                            } else {
-                                final String out = String.join("\n", newLines) + "\n";
-                                SwingUtilities.invokeLater(() -> {
-                                    textArea.append(out);
-                                    if (followCheck.isSelected()) textArea.setCaretPosition(textArea.getDocument().getLength());
-                                });
+                                if (trimmed) {
+                                    // Build full text in background
+                                    String full;
+                                    synchronized (lock) {
+                                        full = String.join("\n", buffer);
+                                    }
+                                    final String out = full;
+                                    SwingUtilities.invokeLater(() -> {
+                                        textArea.setText(out);
+                                        if (followCheck.isSelected())
+                                            textArea.setCaretPosition(textArea.getDocument().getLength());
+                                    });
+                                } else {
+                                    final String out = String.join("\n", newLines) + "\n";
+                                    SwingUtilities.invokeLater(() -> {
+                                        textArea.append(out);
+                                        if (followCheck.isSelected())
+                                            textArea.setCaretPosition(textArea.getDocument().getLength());
+                                    });
+                                }
                             }
                         }
                     }
+                } catch (Exception ignored) {
                 }
-            } catch (Exception ignored) {}
-        }, 1000, 1000, TimeUnit.MILLISECONDS);
+            }, 1000, 1000, TimeUnit.MILLISECONDS);
+        }
     }
 
     public void stop() {
