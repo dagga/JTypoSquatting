@@ -343,9 +343,9 @@ public class JTypoFrame extends JFrame {
         domainRowMap.clear();
         domainDataMap.clear();
         previewPanel.clearPreview();
-        activeDomainCount = 0;
-        deadDomainCount = 0;
-        totalGeneratedCount = 0;
+        activeDomainCount.set(0);
+        deadDomainCount.set(0);
+        totalGeneratedCount.set(0);
 
         streamingService.startDomainChecks(domain);
     }
@@ -362,9 +362,9 @@ public class JTypoFrame extends JFrame {
         });
     }
 
-    private volatile int activeDomainCount = 0;
-    private volatile int deadDomainCount = 0;
-    private volatile int totalGeneratedCount = 0;
+    private volatile AtomicInteger activeDomainCount = new AtomicInteger(0);
+    private volatile AtomicInteger deadDomainCount = new AtomicInteger(0);;
+    private volatile AtomicInteger totalGeneratedCount = new AtomicInteger(0);;
 
     private void updateDomainTable(DomainResultDTO result) {
         if (SwingUtilities.isEventDispatchThread()) {
@@ -390,7 +390,7 @@ public class JTypoFrame extends JFrame {
             if (removeRow != -1) {
                 String removedStatus = (String) tableModel.getValueAt(removeRow, 1);
                 if ("Suspicious".equals(removedStatus) || "Safe".equals(removedStatus)) {
-                    activeDomainCount--;
+                    activeDomainCount.addAndGet(-1);
                 } else if ("Testing...".equals(removedStatus)) {
                     // Do not count Testing... domains in active/dead counts
                 }
@@ -426,7 +426,7 @@ public class JTypoFrame extends JFrame {
                 if (removeRow != -1) {
                     String removedStatus = (String) tableModel.getValueAt(removeRow, 1);
                     if ("Suspicious".equals(removedStatus) || "Safe".equals(removedStatus)) {
-                        activeDomainCount--;
+                        activeDomainCount.addAndGet(-1);
                     } else if ("Testing...".equals(removedStatus)) {
                         // Do not count Testing... domains in active/dead counts
                     }
@@ -444,7 +444,7 @@ public class JTypoFrame extends JFrame {
                 }
             } else if (!domainRowMap.containsKey(result.getDomain())) {
                 // Add new domain (only if not Unreachable)
-                totalGeneratedCount++;
+                totalGeneratedCount.addAndGet(1);
                 String flag = getFlagForLanguage(result.getLanguage());
                 tableModel.addRow(new Object[]{
                         result.getDomain(),
@@ -460,7 +460,7 @@ public class JTypoFrame extends JFrame {
                 jTableOutput.revalidate();
                 jTableOutput.repaint();
                 if ("Suspicious".equals(result.getStatus()) || "Safe".equals(result.getStatus())) {
-                    activeDomainCount += 1;
+                    activeDomainCount.addAndGet(1);
                 }
             } else {
                 // Update existing domain
@@ -471,23 +471,23 @@ public class JTypoFrame extends JFrame {
                 // Update counters based on status transition
                 if ("Active".equals(oldStatus)) {
                     if (!"Active".equals(newStatus)) {
-                        activeDomainCount--;
+                        activeDomainCount.addAndGet(-1);
                         if ("Dead".equals(newStatus)) {
-                            deadDomainCount++;
+                            deadDomainCount.addAndGet(1);
                         }
                     }
                 } else if ("Dead".equals(oldStatus)) {
                     if (!"Dead".equals(newStatus)) {
-                        deadDomainCount--;
+                        deadDomainCount.addAndGet(-1);
                         if ("Active".equals(newStatus)) {
-                            activeDomainCount++;
+                            activeDomainCount.addAndGet(1);
                         }
                     }
                 } else if ("Testing...".equals(oldStatus)) {
                     if ("Active".equals(newStatus)) {
-                        activeDomainCount++;
+                        activeDomainCount.addAndGet(1);
                     } else if ("Dead".equals(newStatus)) {
-                        deadDomainCount++;
+                        deadDomainCount.addAndGet(1);
                     }
                 }
 
@@ -541,8 +541,8 @@ public class JTypoFrame extends JFrame {
     }
 
     private void updateConsole() {
-        int httpUpCount = activeDomainCount;
-        int inaccessibleCount = deadDomainCount;
+        int httpUpCount = activeDomainCount.get();
+        int inaccessibleCount = deadDomainCount.get();
         String metrics = config.getMessage("metrics.generated") + totalGeneratedCount + 
                        config.getMessage("metrics.separator") +
                        config.getMessage("metrics.http.up") + httpUpCount + 
@@ -615,9 +615,9 @@ public class JTypoFrame extends JFrame {
         domainRowMap.clear();
         domainDataMap.clear();
         previewPanel.clearPreview();
-        activeDomainCount = 0;
-        deadDomainCount = 0;
-        totalGeneratedCount = 0;
+        activeDomainCount.set(0);
+        deadDomainCount.set(0);
+        totalGeneratedCount.set(0);
 
         // Clear log panels and stop tailers
         if (backendLogPanel != null) {
@@ -1172,14 +1172,42 @@ public class JTypoFrame extends JFrame {
         public FlagCellRenderer() {
             setHorizontalAlignment(JLabel.CENTER);
             setOpaque(true);
-            setFont(new Font("SansSerif", Font.PLAIN, 16));
+            // Use a font that supports emojis - try emoji fonts first, fallback to default
+            Font emojiFont = getEmojiFont();
+            setFont(emojiFont != null ? emojiFont : new Font("SansSerif", Font.PLAIN, 20));
+        }
+
+        /**
+         * Try to find a font that supports emoji/flag characters
+         */
+        private Font getEmojiFont() {
+            // Try common emoji font names for different platforms
+            String[] emojiFontNames = {
+                "Segoe UI Emoji",      // Windows
+                "Apple Color Emoji",   // macOS
+                "Noto Color Emoji",    // Linux with Noto fonts
+                "EmojiOne",           // Some Linux systems
+                "Twemoji",            // Some systems
+                "Symbola"             // Fallback symbol font
+            };
+
+            for (String fontName : emojiFontNames) {
+                Font font = new Font(fontName, Font.PLAIN, 20);
+                if (font.getFamily().equals(fontName)) {
+                    return font;
+                }
+            }
+
+            // Check if system default font can display emoji
+            Font defaultFont = new Font(Font.SANS_SERIF, Font.PLAIN, 20);
+            return defaultFont;
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
             String flag = (value != null) ? value.toString() : "";
-            
+
             int modelRow = table.convertRowIndexToModel(row);
             Object statusObj = table.getModel().getValueAt(modelRow, 1);
             String status = (statusObj != null) ? statusObj.toString().trim() : "";
@@ -1202,7 +1230,7 @@ public class JTypoFrame extends JFrame {
 
             setText(flag);
             setIcon(null);
-            
+
             return this;
         }
     }
