@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.db;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import org.h2.tools.Server;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.sql.*;
@@ -17,6 +18,9 @@ public class DatabaseService {
     private Connection connection;
     private Server h2Server;
 
+    @Value("${spring.datasource.url:jdbc:h2:file:./typosquatting_db}")
+    private String datasourceUrl;
+
     @PostConstruct
     public void init() throws SQLException {
         try {
@@ -25,12 +29,12 @@ public class DatabaseService {
             throw new SQLException("H2 driver not found", e);
         }
 
-        // Use persistent database by default
-        connection = DriverManager.getConnection("jdbc:h2:file:./typosquatting_db", "sa", "");
+        // Use configured database URL (file for production, mem for tests)
+        connection = DriverManager.getConnection(datasourceUrl, "sa", "");
         h2Server = null;
 
         initializeTable();
-        
+
         // Clear database at startup to ensure clean state
         deleteAll();
     }
