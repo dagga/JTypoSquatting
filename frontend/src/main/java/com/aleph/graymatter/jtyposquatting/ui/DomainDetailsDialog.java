@@ -97,11 +97,12 @@ public class DomainDetailsDialog extends JDialog {
         JPanel header = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
 
         // Status LED
-        Color ledColor;
-        if ("Suspicious".equals(data.getStatus())) ledColor = new Color(255, 80, 80); // Red
-        else if ("Safe".equals(data.getStatus())) ledColor = new Color(100, 200, 100); // Green
-        else if ("Checking".equals(data.getStatus()) || "Testing...".equals(data.getStatus())) ledColor = new Color(255, 165, 0); // Orange
-        else ledColor = new Color(200, 200, 200); // Grey
+        Color ledColor = switch (data.getStatus()) {
+            case "Suspicious" -> new Color(255, 80, 80); // Red
+            case "Safe" -> new Color(100, 200, 100); // Green
+            case "Checking", "Testing..." -> new Color(255, 165, 0); // Orange
+            case null, default -> new Color(200, 200, 200); // Grey
+        };
 
         JLabel ledLabel = new JLabel(new LedIcon(ledColor, 20));
         header.add(ledLabel);
