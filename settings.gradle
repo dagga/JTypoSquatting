@@ -1,1 +1,5 @@
 rootProject.name = 'JTypoSquatting'
+
+include ':shared'
+include ':backend'
+include ':frontend'

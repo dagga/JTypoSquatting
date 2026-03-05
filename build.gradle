@@ -1,38 +1,262 @@
+// Root project configuration
 plugins {
-    id 'java'
-    id 'application'
+    id 'org.springframework.boot' version '3.5.0' apply false
+    id 'org.openjfx.javafxplugin' version '0.0.14' apply false
 }
 
-group = 'com.aleph.graymatter'
-version = '1.0-SNAPSHOT'
+// Load version from gradle.properties
+def projectVersion = project.hasProperty('version') ? project.getProperty('version') : '2.0-alpha1'
 
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src']
+allprojects {
+    group = 'com.aleph.graymatter'
+    version = projectVersion
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    
+    java {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+    
+    // Configure source sets to use standard Maven layout
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java']
+            resources.srcDirs = ['src/main/resources']
+        }
+        test {
+            java.srcDirs = ['src/test/java']
+            resources.srcDirs = ['src/test/resources']
         }
     }
 }
 
-repositories {
-    mavenCentral()
-}
+// Configuration pour le module shared
+project(':shared') {
+    dependencies {
+        implementation 'com.google.guava:guava:33.1.0-jre'
+        implementation 'com.googlecode.json-simple:json-simple:1.1.1'
 
-dependencies {
-    implementation 'com.google.guava:guava:33.1.0-jre'
-    implementation 'com.googlecode.json-simple:json-simple:1.1.1'
-}
+        // Language detection
+        implementation 'com.github.pemistahl:lingua:1.2.1'
 
-application {
-    mainClass = 'com.aleph.graymatter.jtyposquatting.JTypoSquatting'
-}
-
-jar {
-    duplicatesStrategy = 'exclude'
-    manifest {
-        attributes 'Main-Class': application.mainClass
+        // JSoup for HTML parsing
+        implementation 'org.jsoup:jsoup:1.17.2'
     }
-    from {
-        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+}
+
+// Configuration pour le module backend
+project(':backend') {
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'org.openjfx.javafxplugin'
+
+    javafx {
+        version = "21"
+        modules = [ 'javafx.controls', 'javafx.swing', 'javafx.graphics', 'javafx.web' ]
+    }
+
+    dependencies {
+        implementation project(':shared')
+
+        // Spring Boot for REST API
+        implementation 'org.springframework.boot:spring-boot-starter-web:3.5.0'
+        implementation 'org.springframework.boot:spring-boot-starter-jetty:3.5.0'
+
+        // H2 embedded database (moved from shared)
+        implementation 'com.h2database:h2:2.2.224'
+
+        // Business logic dependencies
+        implementation 'com.google.guava:guava:33.1.0-jre'
+        implementation 'com.googlecode.json-simple:json-simple:1.1.1'
+        implementation 'com.google.code.gson:gson:2.10.1'
+
+        // JSoup for HTML parsing
+        implementation 'org.jsoup:jsoup:1.17.2'
+
+        // Language detection
+        implementation 'com.github.pemistahl:lingua:1.2.1'
+    }
+
+    // Configure Spring Boot to find the main class
+    tasks.withType(org.springframework.boot.gradle.tasks.bundling.BootJar) {
+        mainClass = 'com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication'
+    }
+
+    // Configure bootRun with JavaFX VM arguments
+    tasks.named('bootRun') {
+        jvmArgs = [
+            '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED',
+            '--add-opens', 'java.desktop/sun.awt=ALL-UNNAMED',
+            '--add-opens', 'java.desktop/sun.awt.X11=ALL-UNNAMED',
+            '--add-opens', 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
+            '--add-opens', 'javafx.graphics/com.sun.glass.ui=ALL-UNNAMED',
+            '-Djava.awt.headless=false',
+            '-Dglass.platform=gtk',
+            // Force software rendering for JavaFX (fixes black screenshots)
+            '-Dprism.order=sw',
+            '-Dprism.vsync=false',
+            '-Dprism.forceGPU=false'
+        ]
+    }
+}
+
+// Configuration pour le module frontend
+project(':frontend') {
+    apply plugin: 'java'
+
+    dependencies {
+        implementation project(':shared')
+
+        // HTTP Client for REST calls
+        implementation 'com.google.guava:guava:33.1.0-jre'
+        implementation 'com.googlecode.json-simple:json-simple:1.1.1'
+        implementation 'com.google.code.gson:gson:2.10.1'
+
+        // JSoup for HTML parsing
+        implementation 'org.jsoup:jsoup:1.17.2'
+
+        // Language detection
+        implementation 'com.github.pemistahl:lingua:1.2.1'
+
+        // No JavaFX dependencies: using Swing for UI.
+    }
+
+    jar {
+        archiveFileName = 'JTypoSquatting-frontend.jar'
+        duplicatesStrategy = 'exclude'
+        manifest {
+            attributes 'Main-Class': 'com.aleph.graymatter.jtyposquatting.ui.JTypoFrame'
+        }
+    }
+
+    // Task to create a fat JAR with all dependencies (optimized - excludes language models)
+    tasks.register('fatJar', Jar) {
+        archiveFileName = 'JTypoSquatting.jar'
+        duplicatesStrategy = 'exclude'
+        manifest {
+            attributes 'Main-Class': 'com.aleph.graymatter.jtyposquatting.ui.JTypoFrame'
+        }
+        from {
+            configurations.runtimeClasspath.collect { 
+                if (it.isDirectory()) { 
+                    it 
+                } else {
+                    // Exclude language models from lingua library (not needed in frontend)
+                    zipTree(it).matching {
+                        exclude 'language-models/**'
+                        exclude '**/lingua/language-models/**'
+                    }
+                }
+            }
+        }
+        with jar
+    }
+
+    // Task to copy fat JAR to project root directory
+    tasks.register('copyFatJar', Copy) {
+        dependsOn fatJar
+        from "${buildDir}/libs/JTypoSquatting.jar"
+        into "${project.rootDir}"
+        
+        // Avoid conflicts with other tasks
+        outputs.upToDateWhen { false }
+    }
+
+    // Task to run frontend
+    tasks.register('run', JavaExec) {
+        description = 'Runs the frontend application'
+        group = 'application'
+
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'com.aleph.graymatter.jtyposquatting.ui.JTypoFrame'
+        jvmArgs = [
+            '-Djava.awt.headless=false',
+            '-Dawt.toolkit=sun.awt.X11.XToolkit',
+            '-Djava.awt.graphicsenv=sun.awt.X11GraphicsEnvironment',
+            '--add-opens', 'java.desktop/javax.swing=ALL-UNNAMED',
+            '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED'
+        ]
+    }
+
+    // jpackage task to create installer
+    def jpackagePath = System.getenv('JPACKAGE_HOME') ?: '/usr/bin/jpackage'
+
+    tasks.register('packageApp', Exec) {
+        description = 'Creates native app image using jpackage (cross-platform)'
+        group = 'application'
+
+        dependsOn fatJar
+
+        workingDir = project.rootDir
+
+        def outputDir = "${project.rootDir}/dist"
+
+        commandLine jpackagePath,
+            '--input', "${project.buildDir}/libs",
+            '--main-jar', 'JTypoSquatting.jar',
+            '--name', 'JTypoSquatting',
+            '--app-version', projectVersion,
+            '--vendor', 'Aleph Graymatter',
+            '--description', 'TypoSquatting detection tool',
+            '--type', 'app-image',
+            '--dest', outputDir,
+            '--java-options', '-Djava.awt.headless=false',
+            '--java-options', '--add-opens=java.desktop/javax.swing=ALL-UNNAMED',
+            '--java-options', '--add-opens=java.desktop/java.awt=ALL-UNNAMED'
+    }
+
+    tasks.register('packageAppMsi', Exec) {
+        description = 'Creates MSI installer for Windows'
+        group = 'application'
+
+        dependsOn fatJar
+
+        workingDir = project.rootDir
+
+        def outputDir = "${project.rootDir}/dist"
+
+        commandLine jpackagePath,
+            '--input', "${project.buildDir}/libs",
+            '--main-jar', 'JTypoSquatting.jar',
+            '--name', 'JTypoSquatting',
+            '--app-version', projectVersion,
+            '--vendor', 'Aleph Graymatter',
+            '--description', 'TypoSquatting detection tool',
+            '--type', 'msi',
+            '--dest', outputDir,
+            '--java-options', '-Djava.awt.headless=false',
+            '--java-options', '--add-opens=java.desktop/javax.swing=ALL-UNNAMED',
+            '--java-options', '--add-opens=java.desktop/java.awt=ALL-UNNAMED'
+    }
+
+    tasks.register('packageAppExe', Exec) {
+        description = 'Creates EXE installer for Windows'
+        group = 'application'
+
+        dependsOn fatJar
+
+        workingDir = project.rootDir
+
+        def outputDir = "${project.rootDir}/dist"
+
+        commandLine jpackagePath,
+            '--input', "${project.buildDir}/libs",
+            '--main-jar', 'JTypoSquatting.jar',
+            '--name', 'JTypoSquatting',
+            '--app-version', projectVersion,
+            '--vendor', 'Aleph Graymatter',
+            '--description', 'TypoSquatting detection tool',
+            '--type', 'exe',
+            '--dest', outputDir,
+            '--java-options', '-Djava.awt.headless=false',
+            '--java-options', '--add-opens=java.desktop/javax.swing=ALL-UNNAMED',
+            '--java-options', '--add-opens=java.desktop/java.awt=ALL-UNNAMED',
+            '--win-console'
     }
 }
