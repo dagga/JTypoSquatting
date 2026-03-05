@@ -224,16 +224,22 @@ if curl -s --connect-timeout 1 http://localhost:8080/ >/dev/null 2>&1; then
     exit 1
 fi
 
-# Build if needed
+# Build fatjar
 echo ""
-echo "[TEST] Lancement d'un build complet pour vérification..."
-./gradlew clean build --no-daemon
+echo "[INFO] Building fatjar..."
+./gradlew :frontend:copyFatJar --no-daemon
 if [ $? -ne 0 ]; then
-    echo "[ERREUR] Le build a échoué !"
+    echo "[ERROR] Fatjar build failed!"
     exit 1
-else
-    echo "[OK] Build réussi."
 fi
+
+# Verify fatjar exists
+FATJAR="$BASE_DIR/JTypoSquatting.jar"
+if [ ! -f "$FATJAR" ]; then
+    echo "[ERROR] Fatjar not found at: $FATJAR"
+    exit 1
+fi
+echo "[OK] Fatjar built successfully: $FATJAR"
 
 # Start backend in background
 echo ""
@@ -265,12 +271,12 @@ if ! curl -s http://localhost:8080/ >/dev/null 2>&1; then
     exit 1
 fi
 
-# Start frontend
+# Start frontend using fatjar
 echo ""
 echo "Starting frontend (DISPLAY=$DISPLAY)..."
 
-echo "Starting frontend with gradle... (Ctrl+C to stop)"
-nohup ./gradlew :frontend:run --no-daemon > /tmp/jtypo-frontend.log 2>&1 &
+echo "Starting frontend from fatjar... (Ctrl+C to stop)"
+nohup $JAVA_CMD --add-opens java.desktop/javax.swing=ALL-UNNAMED --add-opens java.desktop/java.awt=ALL-UNNAMED -Djava.awt.headless=false -jar "$FATJAR" > /tmp/jtypo-frontend.log 2>&1 &
 FRONTEND_PID=$!
 echo "Frontend PID: $FRONTEND_PID"
 
