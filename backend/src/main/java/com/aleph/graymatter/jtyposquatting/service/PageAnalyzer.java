@@ -161,7 +161,14 @@ public class PageAnalyzer {
                 if (textContent != null && !textContent.isEmpty()) {
                     Language detectedLang = LANGUAGE_DETECTOR.detectLanguageOf(textContent);
                     if (detectedLang != Language.UNKNOWN) {
-                        data.setDetectedLanguage(detectedLang.toString());
+                        data.setDetectedLanguage(detectedLang.name());
+                    } else {
+                        // If language detection fails, try with a longer text sample
+                        String longerText = textContent.length() > 1000 ? textContent.substring(0, 1000) : textContent;
+                        detectedLang = LANGUAGE_DETECTOR.detectLanguageOf(longerText);
+                        if (detectedLang != Language.UNKNOWN) {
+                            data.setDetectedLanguage(detectedLang.name());
+                        }
                     }
                 }
                 

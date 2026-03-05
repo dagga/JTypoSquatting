@@ -4,6 +4,7 @@ import com.aleph.graymatter.jtyposquatting.client.JTypoSquattingRestClient;
 import com.aleph.graymatter.jtyposquatting.config.ClientConfig;
 import com.aleph.graymatter.jtyposquatting.config.ConfigManager;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.ui.renderers.FlagIconManager;
 
 import java.awt.datatransfer.DataFlavor;
 import java.util.concurrent.ExecutorService;
@@ -1167,19 +1168,22 @@ public class JTypoFrame extends JFrame {
      * Custom cell renderer for displaying flag icons
      */
     private class FlagCellRenderer extends JLabel implements TableCellRenderer {
+        private final FlagIconManager flagIconManager;
+        
         public FlagCellRenderer() {
             setHorizontalAlignment(JLabel.CENTER);
             setOpaque(true);
-            // Use default font but ensure it's large enough for emoji display
-            setFont(new Font("Dialog", Font.PLAIN, 22));
+            this.flagIconManager = FlagIconManager.getInstance();
         }
 
         @Override
         public Component getTableCellRendererComponent(JTable table, Object value,
                 boolean isSelected, boolean hasFocus, int row, int column) {
-            String flag = (value != null) ? value.toString() : "";
-
+            // Get the language from column 3 (not the flag emoji from column 4)
             int modelRow = table.convertRowIndexToModel(row);
+            Object languageObj = table.getModel().getValueAt(modelRow, 3);
+            String language = (languageObj != null) ? languageObj.toString() : "";
+
             Object statusObj = table.getModel().getValueAt(modelRow, 1);
             String status = (statusObj != null) ? statusObj.toString().trim() : "";
 
@@ -1199,12 +1203,10 @@ public class JTypoFrame extends JFrame {
                 setForeground(Color.BLACK);
             }
 
-            // Ensure flag emoji is displayed
-            if (flag.isEmpty()) {
-                flag = "🌐";
-            }
-            setText(flag);
-            setIcon(null);
+            // Get flag icon from the manager
+            ImageIcon flagIcon = flagIconManager.getFlagIconForLanguage(language);
+            setText("");
+            setIcon(flagIcon);
 
             return this;
         }
