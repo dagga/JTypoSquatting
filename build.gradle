@@ -108,7 +108,25 @@ project(':backend') {
             '--add-opens', 'javafx.graphics/com.sun.glass.ui=ALL-UNNAMED',
             '-Djava.awt.headless=false',
             '-Dglass.platform=gtk',
-            // Force software rendering for JavaFX (fixes black screenshots)
+            // Force software rendering for JavaFX (required for headless/Xvfb)
+            '-Dprism.order=sw',
+            '-Dprism.vsync=false',
+            '-Dprism.forceGPU=false'
+        ]
+    }
+
+    // Configure test task with JavaFX VM arguments for headless testing
+    test {
+        useJUnitPlatform()
+        jvmArgs = [
+            '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED',
+            '--add-opens', 'java.desktop/sun.awt=ALL-UNNAMED',
+            '--add-opens', 'java.desktop/sun.awt.X11=ALL-UNNAMED',
+            '--add-opens', 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
+            '--add-opens', 'javafx.graphics/com.sun.glass.ui=ALL-UNNAMED',
+            '-Djava.awt.headless=false',
+            '-Dglass.platform=gtk',
+            // Force software rendering for JavaFX (required for headless/Xvfb)
             '-Dprism.order=sw',
             '-Dprism.vsync=false',
             '-Dprism.forceGPU=false'

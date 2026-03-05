@@ -38,7 +38,15 @@ jobs:
       run: |
         # Start Xvfb on display :99
         Xvfb :99 -screen 0 1280x1024x24 &
+        export DISPLAY=:99
         echo "DISPLAY=:99" >> $GITHUB_ENV
+        echo "JavaFX configured with DISPLAY=:99"
+        sleep 2  # Wait for Xvfb to start
+
+    - name: Verify Xvfb is running
+      run: |
+        ps aux | grep Xvfb
+        echo "DISPLAY is: $DISPLAY"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -47,7 +55,8 @@ jobs:
       run: |
         # Run tests with virtual display
         export DISPLAY=:99
-        ./gradlew test --no-daemon --info
+        echo "Running tests with DISPLAY=$DISPLAY"
+        ./gradlew test --no-daemon --info --stacktrace
 
     - name: Upload test reports
       if: always()
@@ -82,7 +91,15 @@ jobs:
     - name: Set up virtual display for JavaFX
       run: |
         Xvfb :99 -screen 0 1280x1024x24 &
+        export DISPLAY=:99
         echo "DISPLAY=:99" >> $GITHUB_ENV
+        echo "JavaFX configured with DISPLAY=:99"
+        sleep 2
+
+    - name: Verify Xvfb is running
+      run: |
+        ps aux | grep Xvfb
+        echo "DISPLAY is: $DISPLAY"
 
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
