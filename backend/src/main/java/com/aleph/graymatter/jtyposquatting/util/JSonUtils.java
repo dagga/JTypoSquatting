@@ -21,17 +21,17 @@ public class JSonUtils {
         JSONObject joOut;
         joOut = new JSONObject();
 
-        Set keyInList = joIn.keySet();
-        Iterator<String> iterator = keyInList.iterator();
+        var keyInList = joIn.keySet();
+        Iterator iterator = keyInList.iterator();
 
         String keyIn;
         while (iterator.hasNext()) {
-            keyIn = iterator.next();
+            keyIn = iterator.next().toString();
             String values = (String) joIn.get(keyIn);
             StringTokenizer tokenizer = new StringTokenizer(values, ",");
             while (tokenizer.hasMoreTokens()) {
                 String token = tokenizer.nextToken().strip();
-                joOut.put(token, keyIn);
+                Object put = joOut.put(token, keyIn);
             }
         }
 
