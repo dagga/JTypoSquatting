@@ -7,15 +7,15 @@ You can ask for access here: https://www.aleph-networks.eu/en/contact/
 ![image](https://github.com/hernic/JTypoSquatting/assets/4397039/874a5ff7-68d5-4d8b-9a60-a4dddde188f9)
 
 - This project is an enhanced version of https://github.com/typosquatter/ail-typo-squatting rewritten in Java.
-- **Version 2.0_alpha1** features a new Swing-based UI with real-time domain checking, screenshot previews, and internationalization support.
+- **Version 2.0_alpha1** features a new Swing-based UI with real-time domain checking, screenshot previews, internationalization support, and **Virtual Threads** for high-concurrency domain checking.
 
 ![image](https://github.com/hernic/JTypoSquatting/assets/4397039/042a2ebf-2b8f-4950-b70f-e4e1717579c7)
 
 ## Requirements
 
-- **Java 17 or higher** is required
+- **Java 21 or higher** is required (for Virtual Threads support)
 - On Windows: https://download.oracle.com/java/21/latest/jdk-21_windows-x64_bin.exe
-- On Linux: `sudo apt install openjdk-17-jdk` or similar
+- On Linux: `sudo apt install openjdk-21-jdk` or similar
 
 ## Quick Start
 
@@ -116,6 +116,37 @@ ui.window.width=1200
 ui.window.height=800
 ui.max.open.dialogs=5
 ```
+
+## Virtual Threads (Java 21+)
+
+The backend uses **Virtual Threads** (Project Loom) for efficient concurrent domain checking:
+
+### Benefits
+
+- **High Concurrency**: Can check hundreds of domains simultaneously without thread pool tuning
+- **Better Resource Usage**: Virtual threads are lightweight (~1KB vs 1MB for platform threads)
+- **Simplified Code**: No need for complex thread pool configurations
+- **I/O Optimized**: Perfect for HTTP requests and screenshot operations
+
+### Configuration
+
+Virtual threads are enabled in `application.properties`:
+
+```properties
+# Virtual Threads (Java 21+)
+spring.threads.virtual.enabled=true
+spring.task.execution.pool.core-size=16
+spring.task.execution.pool.max-size=128
+```
+
+### Performance
+
+| Metric | Platform Threads | Virtual Threads |
+|--------|-----------------|-----------------|
+| Memory per thread | ~1 MB | ~1 KB |
+| Max concurrent checks | ~100 (tunable) | ~1000+ |
+| Thread creation | Slow | Fast |
+| Context switching | Expensive | Lightweight |
 
 ## Algorithms
 

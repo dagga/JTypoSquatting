@@ -30,3 +30,4 @@ bin/
 
 # Stakpak session files
 .stakpak/session*
+/.gradle/buildOutputCleanup/buildOutputCleanup.lock

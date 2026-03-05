@@ -21,18 +21,21 @@ import java.util.function.Consumer;
 /**
  * REST controller for domain data management operations.
  * Provides endpoints for analyzing domains, retrieving cached data, and statistics.
+ * Uses Virtual Threads (Java 21+) for efficient I/O operations.
  */
 @RestController
 @RequestMapping("/api/data")
 public class DomainDataController {
-    
+
     private final DomainCheckService domainCheckService;
     private final DatabaseService databaseService;
     private final PageAnalyzer pageAnalyzer;
-    
+
     // Map to track active analysis sessions for streaming
     private final Map<String, SseEmitter> activeSessions = new ConcurrentHashMap<>();
-    private final ExecutorService executorService = Executors.newFixedThreadPool(10);
+    
+    // Virtual thread executor for analysis tasks (I/O bound operations)
+    private final ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor();
     
     @Autowired
     public DomainDataController(DomainCheckService domainCheckService,

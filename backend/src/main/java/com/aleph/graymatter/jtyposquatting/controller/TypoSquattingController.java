@@ -20,12 +20,20 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+/**
+ * REST controller for typo squatting domain generation and checking.
+ * Uses Virtual Threads (Java 21+) for efficient parallel domain checking.
+ */
 @RestController
 @RequestMapping("/api")
 public class TypoSquattingController {
 
     private final DomainCheckService domainCheckService;
     private final ConcurrentHashMap<String, ExecutorService> activeSessions = new ConcurrentHashMap<>();
+    
+    // Virtual thread executor for parallel domain checks
+    // Each task runs in its own virtual thread, allowing hundreds of concurrent checks
+    private final ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
     public TypoSquattingController(DomainCheckService domainCheckService) {
         this.domainCheckService = domainCheckService;
@@ -33,10 +41,11 @@ public class TypoSquattingController {
 
     @GetMapping(value = "/generate-and-check", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter generateAndCheckDomains(@RequestParam String domain) {
-        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE); // Long timeout for continuous stream
+        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
-        // Create a dedicated executor for this SSE session (10 threads for parallel domain checks - prevents overload)
-        ExecutorService sessionExecutor = Executors.newFixedThreadPool(10);
+        // Create a dedicated virtual thread executor for this SSE session
+        // Virtual threads allow hundreds of concurrent domain checks without thread pool tuning
+        ExecutorService sessionExecutor = Executors.newVirtualThreadPerTaskExecutor();
         String sessionId = String.valueOf(System.identityHashCode(emitter));
         activeSessions.put(sessionId, sessionExecutor);
 
@@ -69,7 +78,8 @@ public class TypoSquattingController {
                     Thread.sleep(2);
                 }
 
-                // 3. Check domains in parallel and stream updates
+                // 3. Check domains in parallel using virtual threads
+                // Each domain check runs in its own virtual thread (I/O bound operation)
                 java.util.List<java.util.concurrent.Future<?>> futures = new java.util.ArrayList<>();
                 for (String generatedDomain : generatedDomains) {
                     if (Thread.currentThread().isInterrupted()) {
