@@ -69,11 +69,12 @@ public class TypoSquattingController {
                 ArrayList<String> generatedDomains = jTypoSquatting.getListOfDomains();
 
                 // 2. Stream generated domains with "Testing..." status first
+                // HTTP code -1 indicates "in progress" (not 0 which means dead/unreachable)
                 for (String generatedDomain : generatedDomains) {
                     if (Thread.currentThread().isInterrupted()) {
                         break;
                     }
-                    DomainResultDTO initialResult = new DomainResultDTO(generatedDomain, "Testing...", "", "", "", 0, null, "", Collections.emptyMap());
+                    DomainResultDTO initialResult = new DomainResultDTO(generatedDomain, "Testing...", "", "", "", -1, null, "", Collections.emptyMap());
                     sendSseEvent(emitter, initialResult);
                     Thread.sleep(2);
                 }

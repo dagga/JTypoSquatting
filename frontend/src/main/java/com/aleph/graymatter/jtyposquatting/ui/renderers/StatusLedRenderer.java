@@ -45,7 +45,14 @@ public class StatusLedRenderer extends JLabel implements javax.swing.table.Table
         Object httpCodeObj = table.getModel().getValueAt(modelRow, 6);
         String httpCodeStr = "";
         if (httpCodeObj != null) {
-            httpCodeStr = httpCodeObj.toString();
+            int httpCode = Integer.parseInt(httpCodeObj.toString());
+            // Show "Test..." for in-progress domains (HTTP code -1)
+            if (httpCode == -1) {
+                httpCodeStr = "Test...";
+            } else if (httpCode > 0) {
+                httpCodeStr = String.valueOf(httpCode);
+            }
+            // Keep empty for httpCode == 0 (unreachable/dead)
         }
         setText(httpCodeStr);
         
