@@ -142,6 +142,10 @@ public class PageAnalyzer {
                     data.setHomepageText(textContent.length() > 200 ? textContent.substring(0, 200) + "..." : textContent);
                 }
                 
+                // Extract page title
+                String title = doc.title();
+                data.setTitle(title != null && !title.trim().isEmpty() ? title : "");
+
                 Element el;
                 el = doc.selectFirst("meta[name=description]");
                 data.setMetaDescription(el != null ? el.attr("content") : null);

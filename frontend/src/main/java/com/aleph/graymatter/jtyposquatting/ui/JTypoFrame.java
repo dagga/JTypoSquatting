@@ -741,7 +741,16 @@ public class JTypoFrame extends JFrame {
             Object httpCodeObj = table.getModel().getValueAt(modelRow, 6);
             String httpCodeStr = "";
             if (httpCodeObj != null) {
-                httpCodeStr = httpCodeObj.toString();
+                try {
+                    int httpCode = Integer.parseInt(httpCodeObj.toString());
+                    // Show HTTP code only for positive values
+                    // Keep empty for httpCode == -1 (testing) and httpCode == 0 (unreachable/dead)
+                    if (httpCode > 0) {
+                        httpCodeStr = String.valueOf(httpCode);
+                    }
+                } catch (NumberFormatException e) {
+                    // Ignore if value is not a valid integer
+                }
             }
             setText(httpCodeStr);
 
