@@ -15,8 +15,7 @@ public class DomainTableCellRenderer extends DefaultTableCellRenderer {
                                                    boolean hasFocus, int row, int column) {
         Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
         
-        if (c instanceof JLabel) {
-            JLabel label = (JLabel) c;
+        if (c instanceof JLabel label) {
             label.setHorizontalAlignment(JLabel.CENTER);
             label.setOpaque(true);
         }

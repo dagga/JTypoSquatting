@@ -24,7 +24,6 @@ bin/
 ### NetBeans ###
 /nbproject/private/
 /nbbuild/
-/dist/
 /nbdist/
 /.nb-gradle/
 
@@ -37,3 +36,12 @@ bin/
 # Stakpak session files
 .stakpak/session*
 /.gradle/buildOutputCleanup/buildOutputCleanup.lock
+/shared/build/classes/java/main/com/aleph/graymatter/jtyposquatting/net/DomainName.class
+/shared/build/classes/java/main/com/aleph/graymatter/jtyposquatting/dto/DomainPageDTO.class
+/shared/build/classes/java/main/com/aleph/graymatter/jtyposquatting/dto/GenerationRequestDTO.class
+/shared/build/classes/java/main/com/aleph/graymatter/jtyposquatting/InvalidDomainException.class
+/shared/build/tmp/jar/MANIFEST.MF
+/shared/build/tmp/compileJava/previous-compilation-data.bin
+/shared/build/libs/shared-2.0-alpha1.jar
+/backend/typosquatting_db.mv.db
+/PortKiller.class
