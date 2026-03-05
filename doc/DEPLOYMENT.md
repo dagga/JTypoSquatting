@@ -377,11 +377,104 @@ sudo rpm -i JTypoSquatting-2.0-alpha1.x86_64.rpm
 
 ## 7. CI/CD with GitHub Actions
 
-### 7.1 Workflow Configuration
+### 7.1 Overview
+
+JTypoSquatting uses GitHub Actions for automated:
+- Building and testing
+- Screenshot capture (with Xvfb)
+- Release creation
+- Artifact distribution
+
+### 7.2 Workflow Configuration
 
 **File:** `.github/workflows/build-and-release.yml`
 
-### 7.2 Automated Build Process
+**Triggers:**
+- Push to `main` or `master` branch
+- Pull requests
+- Tag pushes (for releases)
+- Manual trigger (`workflow_dispatch`)
+
+**Jobs:**
+1. **test** - Run unit and functional tests with Xvfb
+2. **build** - Build project (depends on test)
+3. **analyze-jar-size** - Report JAR size
+
+### 7.3 Xvfb Configuration for Headless Testing
+
+GitHub Actions runs in headless environment. Xvfb (X Virtual Framebuffer) provides virtual display:
+
+```yaml
+- name: Install Xvfb
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
+
+- name: Set up virtual display
+  run: |
+    Xvfb :99 -screen 0 1280x1024x24 &
+    export DISPLAY=:99
+    echo "DISPLAY=:99" >> $GITHUB_ENV
+    sleep 2  # Wait for Xvfb to start
+
+- name: Verify Xvfb
+  run: |
+    ps aux | grep Xvfb
+    echo "DISPLAY is: $DISPLAY"
+
+- name: Run tests
+  run: |
+    export DISPLAY=:99
+    ./gradlew test --no-daemon
+```
+
+### 7.4 Test Modes
+
+Tests have two modes based on environment:
+
+| Environment | Mode | Screenshot Requirement |
+|-------------|------|----------------------|
+| **CI (GitHub Actions)** | Strict | Required (Xvfb provided) |
+| **Local (no display)** | Tolerant | Optional (tests pass) |
+| **Local (with Xvfb)** | Tolerant | Optional |
+
+**Detection:**
+```java
+boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
+
+if (isCI) {
+    // Strict mode: screenshot required
+    assertNotNull(result.getScreenshot());
+} else {
+    // Tolerant mode: screenshot optional
+    if (result.getScreenshot() != null) {
+        assertTrue(result.getScreenshot().length > 0);
+    }
+}
+```
+
+### 7.5 Running Tests Locally
+
+**Without Xvfb (default):**
+```bash
+./gradlew test
+# Tests pass even without screenshots
+```
+
+**With Xvfb (for full testing):**
+```bash
+# Install Xvfb
+sudo apt install xvfb
+
+# Start virtual display
+Xvfb :99 -screen 0 1280x1024x24 &
+export DISPLAY=:99
+
+# Run tests
+./gradlew test
+```
+
+### 7.6 Automated Build Process
 
 ```yaml
 on:
@@ -401,7 +494,7 @@ jobs:
       - run: ./gradlew :frontend:fatJar
 ```
 
-### 7.3 Creating a Release
+### 7.7 Creating a Release
 
 1. **Update version in `gradle.properties`:**
    ```properties
@@ -422,7 +515,7 @@ jobs:
    - Create GitHub Release
    - Attach JAR artifacts
 
-### 7.4 Release Artifacts
+### 7.8 Release Artifacts
 
 After successful build, artifacts are available:
 - `JTypoSquatting-{version}.jar` - Versioned JAR
@@ -431,6 +524,10 @@ After successful build, artifacts are available:
 ---
 
 ## 8. Troubleshooting
+
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed troubleshooting, especially:
+- [Testing Issues](TROUBLESHOOTING.md#5-testing-issues)
+- [CI/CD Issues](TROUBLESHOOTING.md#6-cicd-issues)
 
 ### 8.1 Common Issues
 

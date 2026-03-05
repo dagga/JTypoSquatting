@@ -59,6 +59,13 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 - ✅ Log viewer (backend/frontend)
 - ✅ Multi-language support (EN/FR)
 
+### Testing & CI/CD
+- ✅ JUnit 5 unit and functional tests
+- ✅ Integration tests with Spring Boot
+- ✅ GitHub Actions CI/CD pipeline
+- ✅ Xvfb for headless screenshot testing
+- ✅ Smart test modes (CI-strict / local-tolerant)
+
 ### Performance
 - ✅ Virtual Threads (Java 21+) for high concurrency
 - ✅ Optimized JAR size (32 MB vs 108 MB)
@@ -91,11 +98,53 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 # Copy JAR to root
 ./gradlew :frontend:copyFatJar
 
+# Run tests
+./gradlew test
+
+# Run tests with Xvfb (for screenshot testing)
+Xvfb :99 -screen 0 1280x1024x24 &
+export DISPLAY=:99
+./gradlew test
+
 # Native installer (requires jpackage)
 ./gradlew :frontend:packageApp
 ```
 
 **Full build guide:** [Deployment - Building](doc/DEPLOYMENT.md#3-building-from-source)
+
+---
+
+## Testing
+
+JTypoSquatting includes comprehensive test coverage:
+
+### Test Types
+
+| Type | Description | Command |
+|------|-------------|---------|
+| **Unit Tests** | PageAnalyzer logic | `./gradlew :backend:test --tests "PageAnalyzerUnitTest"` |
+| **Functional Tests** | Real domain analysis | `./gradlew :backend:test --tests "PageAnalyzerFunctionalTest"` |
+| **Integration Tests** | Spring Boot + DB | `./gradlew :backend:test --tests "PageAnalyzerIntegrationTest"` |
+
+### Test Modes
+
+- **CI Mode (GitHub Actions)**: Screenshots required (Xvfb provided)
+- **Local Mode**: Screenshots optional (tests pass without display)
+
+### Running Tests
+
+```bash
+# Default (tolerant mode)
+./gradlew test
+
+# With Xvfb (strict screenshot testing)
+sudo apt install xvfb
+Xvfb :99 -screen 0 1280x1024x24 &
+export DISPLAY=:99
+./gradlew test
+```
+
+**Full testing guide:** [Deployment - Testing](doc/DEPLOYMENT.md#75-running-tests-locally) | [Troubleshooting - Testing](doc/TROUBLESHOOTING.md#5-testing-issues)
 
 ---
 

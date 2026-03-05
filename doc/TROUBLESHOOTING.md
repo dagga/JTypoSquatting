@@ -1,6 +1,6 @@
 # JTypoSquatting - Troubleshooting Guide
 
-**Version:** 2.0-alpha1  
+**Version:** 2.0-alpha1
 **Last Updated:** March 2025
 
 ---
@@ -11,10 +11,12 @@
 2. [Build Issues](#2-build-issues)
 3. [Runtime Issues](#3-runtime-issues)
 4. [Screenshot Issues](#4-screenshot-issues)
-5. [Performance Issues](#5-performance-issues)
-6. [Database Issues](#6-database-issues)
-7. [Internationalization Issues](#7-internationalization-issues)
-8. [FAQ](#8-faq)
+5. [Testing Issues](#5-testing-issues)
+6. [CI/CD Issues](#6-cicd-issues)
+7. [Performance Issues](#7-performance-issues)
+8. [Database Issues](#8-database-issues)
+9. [Internationalization Issues](#9-internationalization-issues)
+10. [FAQ](#10-faq)
 
 ---
 
@@ -245,7 +247,151 @@ java -Dsun.java2d.opengl=false -jar JTypoSquatting.jar
 
 ---
 
-## 5. Performance Issues
+## 5. Testing Issues
+
+### Error: "Screenshot should not be null in CI environment"
+
+**Symptoms:**
+```
+org.opentest4j.AssertionFailedError: Screenshot should not be null in CI environment
+```
+
+**Cause:** JavaFX cannot capture screenshots without a display
+
+**Solutions:**
+
+```bash
+# In CI (GitHub Actions): Xvfb is auto-configured
+# Check workflow logs for Xvfb startup
+
+# Locally (optional):
+# 1. Install Xvfb
+sudo apt install xvfb
+
+# 2. Start virtual display
+Xvfb :99 -screen 0 1280x1024x24 &
+export DISPLAY=:99
+
+# 3. Run tests
+./gradlew test
+
+# Tests are tolerant locally (pass without screenshot)
+# Tests are strict in CI (require screenshot)
+```
+
+### Error: "No tests found"
+
+**Symptoms:**
+```
+FAILURE: Build failed with an exception.
+* What went wrong:
+Execution failed for task ':backend:test'.
+> No tests found for given includes
+```
+
+**Solutions:**
+
+```bash
+# Ensure JUnit Platform is configured
+# In build.gradle:
+test {
+    useJUnitPlatform()
+}
+
+# Run with full class name
+./gradlew test --tests "com.aleph.graymatter.jtyposquatting.service.PageAnalyzerFunctionalTest"
+```
+
+### Error: IntelliJ doesn't recognize test annotations
+
+**Symptoms:**
+- `@SpringBootTest` shows as error
+- `@ActiveProfiles` shows as error
+
+**Solutions:**
+
+```bash
+# Reload Gradle project in IntelliJ:
+# 1. Right-click on build.gradle
+# 2. Select "Reload Gradle Project"
+
+# Or invalidate caches:
+# 1. File → Invalidate Caches
+# 2. Invalidate and Restart
+```
+
+---
+
+## 6. CI/CD Issues
+
+### Error: GitHub Actions workflow doesn't trigger
+
+**Symptoms:**
+- Push to main branch doesn't start CI
+- Manual workflow trigger doesn't work
+
+**Solutions:**
+
+1. **Enable GitHub Actions:**
+   - Go to repo → Settings → Actions
+   - Select "Allow all actions and reusable workflows"
+   - Click "Save"
+
+2. **Check workflow permissions:**
+   - Settings → Actions → Workflow permissions
+   - Select "Read and write permissions"
+
+3. **Verify workflow file:**
+   ```bash
+   # Validate YAML syntax
+   python3 -c "import yaml; yaml.safe_load(open('.github/workflows/build-and-release.yml'))"
+   ```
+
+4. **Manual trigger:**
+   - Go to Actions tab
+   - Select "Build and Release"
+   - Click "Run workflow"
+
+### Error: "JavaFX configuration" warnings in CI
+
+**Symptoms:**
+```
+Prism ES2 Error - nInitialize: glXChooseFBConfig failed
+WARNING: Unsupported JavaFX configuration
+```
+
+**Cause:** Normal in headless environment with Xvfb
+
+**Solution:** No action needed - tests still pass. These are warnings, not errors.
+
+### Error: Xvfb fails to start in CI
+
+**Symptoms:**
+```
+Error: Cannot open display: :99
+```
+
+**Solutions:**
+
+```yaml
+# In GitHub Actions workflow:
+- name: Set up virtual display
+  run: |
+    sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
+    Xvfb :99 -screen 0 1280x1024x24 &
+    export DISPLAY=:99
+    echo "DISPLAY=:99" >> $GITHUB_ENV
+    sleep 2  # Wait for Xvfb to start
+
+- name: Verify Xvfb
+  run: |
+    ps aux | grep Xvfb
+    echo "DISPLAY is: $DISPLAY"
+```
+
+---
+
+## 7. Performance Issues
 
 ### Slow domain checking
 
@@ -286,7 +432,7 @@ java -Xlog:gc* -jar JTypoSquatting.jar
 
 ---
 
-## 6. Database Issues
+## 8. Database Issues
 
 ### Error: "Database locked"
 
@@ -330,7 +476,7 @@ rm -rf ~/jtyposquatting/
 
 ---
 
-## 7. Internationalization Issues
+## 9. Internationalization Issues
 
 ### UI shows "!" keys "!"
 
@@ -369,7 +515,7 @@ java -Duser.language=fr -Duser.country=FR -jar JTypoSquatting.jar
 
 ---
 
-## 8. FAQ
+## 10. FAQ
 
 ### Q: How many domains can be checked at once?
 
