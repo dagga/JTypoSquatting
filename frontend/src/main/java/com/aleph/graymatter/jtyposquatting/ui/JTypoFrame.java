@@ -360,9 +360,9 @@ public class JTypoFrame extends JFrame {
         });
     }
 
-    private volatile AtomicInteger activeDomainCount = new AtomicInteger(0);
-    private volatile AtomicInteger deadDomainCount = new AtomicInteger(0);;
-    private volatile AtomicInteger totalGeneratedCount = new AtomicInteger(0);;
+    private final AtomicInteger activeDomainCount = new AtomicInteger(0);
+    private final AtomicInteger deadDomainCount = new AtomicInteger(0);;
+    private final AtomicInteger totalGeneratedCount = new AtomicInteger(0);;
 
     private void updateDomainTable(DomainResultDTO result) {
         if (SwingUtilities.isEventDispatchThread()) {
@@ -1170,35 +1170,8 @@ public class JTypoFrame extends JFrame {
         public FlagCellRenderer() {
             setHorizontalAlignment(JLabel.CENTER);
             setOpaque(true);
-            // Use a font that supports emojis - try emoji fonts first, fallback to default
-            Font emojiFont = getEmojiFont();
-            setFont(emojiFont != null ? emojiFont : new Font("SansSerif", Font.PLAIN, 20));
-        }
-
-        /**
-         * Try to find a font that supports emoji/flag characters
-         */
-        private Font getEmojiFont() {
-            // Try common emoji font names for different platforms
-            String[] emojiFontNames = {
-                "Segoe UI Emoji",      // Windows
-                "Apple Color Emoji",   // macOS
-                "Noto Color Emoji",    // Linux with Noto fonts
-                "EmojiOne",           // Some Linux systems
-                "Twemoji",            // Some systems
-                "Symbola"             // Fallback symbol font
-            };
-
-            for (String fontName : emojiFontNames) {
-                Font font = new Font(fontName, Font.PLAIN, 20);
-                if (font.getFamily().equals(fontName)) {
-                    return font;
-                }
-            }
-
-            // Check if system default font can display emoji
-            Font defaultFont = new Font(Font.SANS_SERIF, Font.PLAIN, 20);
-            return defaultFont;
+            // Use default font but ensure it's large enough for emoji display
+            setFont(new Font("Dialog", Font.PLAIN, 22));
         }
 
         @Override
@@ -1226,6 +1199,10 @@ public class JTypoFrame extends JFrame {
                 setForeground(Color.BLACK);
             }
 
+            // Ensure flag emoji is displayed
+            if (flag.isEmpty()) {
+                flag = "🌐";
+            }
             setText(flag);
             setIcon(null);
 
