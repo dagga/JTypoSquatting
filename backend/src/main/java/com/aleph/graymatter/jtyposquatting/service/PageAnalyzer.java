@@ -10,7 +10,6 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Scene;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.VBox;
-import javafx.scene.paint.Color;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
@@ -21,7 +20,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.awt.Graphics2D;
+import javax.imageio.ImageIO;
+import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
@@ -32,7 +32,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import javax.imageio.ImageIO;
+import static java.lang.Thread.sleep;
 
 @Service
 public class PageAnalyzer {
@@ -320,7 +320,7 @@ public class PageAnalyzer {
                     CountDownLatch pulseLatch = new CountDownLatch(1);
                     Platform.runLater(() -> {
                         try {
-                            Thread.sleep(200);
+                            sleep(200);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         }
@@ -346,7 +346,7 @@ public class PageAnalyzer {
                                         Platform.runLater(stage::close);
                                         return;
                                     }
-                                    Thread.sleep(1000);
+                                    sleep(1000);
                                 }
                             } catch (InterruptedException e) {
                                 logger.debug("Screenshot wait interrupted for {}", url);
@@ -397,7 +397,7 @@ public class PageAnalyzer {
                             CountDownLatch resizeLatch = new CountDownLatch(1);
                             Platform.runLater(() -> {
                                 try {
-                                    Thread.sleep(500);
+                                    sleep(500);
                                 } catch (InterruptedException e) {
                                     Thread.currentThread().interrupt();
                                 }

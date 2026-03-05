@@ -381,8 +381,8 @@ public class JTypoFrame extends JFrame {
     }
 
     private final AtomicInteger activeDomainCount = new AtomicInteger(0);
-    private final AtomicInteger deadDomainCount = new AtomicInteger(0);;
-    private final AtomicInteger totalGeneratedCount = new AtomicInteger(0);;
+    private final AtomicInteger deadDomainCount = new AtomicInteger(0);
+    private final AtomicInteger totalGeneratedCount = new AtomicInteger(0);
 
     private void updateDomainTable(DomainResultDTO result) {
         if (SwingUtilities.isEventDispatchThread()) {

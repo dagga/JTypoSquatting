@@ -9,11 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.FileNotFoundException;
@@ -25,6 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+
+import static java.lang.Thread.sleep;
 
 /**
  * REST controller for typo squatting domain generation and checking.
@@ -81,7 +79,7 @@ public class TypoSquattingController {
                     }
                     DomainResultDTO initialResult = new DomainResultDTO(generatedDomain, "Testing...", "", "", "", -1, null, "", Collections.emptyMap());
                     sendSseEvent(emitter, initialResult);
-                    Thread.sleep(2);
+                    sleep(2);
                 }
 
                 // 3. Check domains in parallel
@@ -98,7 +96,7 @@ public class TypoSquattingController {
                         if (finalResult != null) {
                             try {
                                 sendSseEvent(emitter, finalResult);
-                                Thread.sleep(2);
+                                sleep(2);
                             } catch (IOException | InterruptedException e) {
                                 logger.error("Error sending SSE event: {}", e.getMessage());
                                 Thread.currentThread().interrupt();
@@ -167,7 +165,7 @@ public class TypoSquattingController {
         cancelActiveAnalysis();
 
         try {
-            Thread.sleep(500);
+            sleep(500);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -185,8 +183,7 @@ public class TypoSquattingController {
     }
 
     private void sendSseEvent(SseEmitter emitter, Object data) throws IOException {
-        if (data instanceof DomainResultDTO) {
-            DomainResultDTO dto = (DomainResultDTO) data;
+        if (data instanceof DomainResultDTO dto) {
             byte[] screenshot = dto.getScreenshot();
             logger.debug("Sending SSE event for {} with screenshot: {} bytes", dto.getDomain(), screenshot != null ? screenshot.length : 0);
         }
