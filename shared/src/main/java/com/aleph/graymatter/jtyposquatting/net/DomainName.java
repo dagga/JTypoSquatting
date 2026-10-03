@@ -22,15 +22,20 @@ public final class DomainName {
     }
 
     public static String getDomainWithoutSubDomainMinusTLD(final String domain) {
-        if (!haveSubDomain(domain)) {
-            return getDomainWithoutTLD(domain);
-        } else {
-            String domainWithoutTLD = getDomainWithoutTLD(domain);
-            return getDomainWithoutSubDomain(domainWithoutTLD);
+        String domainWithoutTLD = getDomainWithoutTLD(domain);
+        if (haveSubDomain(domain)) {
+            int firstDot = domainWithoutTLD.indexOf(".");
+            if (firstDot != -1) {
+                return domainWithoutTLD.substring(firstDot + 1);
+            }
         }
+        return domainWithoutTLD;
     }
 
     private static boolean isValidDomain(String domainName) {
+        if (domainName == null || !domainName.contains(".") || domainName.endsWith(".") || domainName.startsWith(".")) {
+            return false;
+        }
         try {
             return com.google.common.net.InternetDomainName.isValid(domainName);
         } catch (Exception e) {
