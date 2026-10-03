@@ -10,9 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 /**
  * Integration tests for PageAnalyzer service.
@@ -40,12 +43,17 @@ class PageAnalyzerIntegrationTest {
     @Autowired
     private DomainCheckService domainCheckService;
 
+    @MockitoBean
+    private ScreenshotService screenshotService;
+
     private static final String TEST_DOMAIN = "www.aleph-networks.eu";
 
     @BeforeEach
     void setUp() throws Exception {
         // Clear database before each test
         databaseService.deleteAll();
+        // Mock screenshot service for integration tests to work in CI
+        when(screenshotService.captureScreenshot(any())).thenReturn(new byte[1024]);
     }
 
     @Test
