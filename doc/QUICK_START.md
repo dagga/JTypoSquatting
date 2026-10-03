@@ -1,178 +1,149 @@
-# JTypoSquatting - Quick Start Guide
+# JTypoSquatting - Guide de Démarrage Rapide
 
-**Version:** 2.0-alpha1  
-**Time to First Run:** 5 minutes
+**Version :** 2.0-alpha1  
+**Temps avant premier lancement :** ~5 minutes
 
----
-
-## Prerequisites
-
-- **Java 21 or higher** installed
-  - Check: `java -version`
-  - Download: https://www.oracle.com/java/technologies/downloads/
+> [!IMPORTANT]
+> **JTypoSquatting est une application à DEUX processus distincts.**
+> Le backend (serveur API Spring Boot) et le frontend (interface Swing) doivent être démarrés séparément,
+> dans deux terminaux différents, dans l'ordre indiqué ci-dessous.
 
 ---
 
-## Option 1: Run Pre-built JAR (Fastest)
+## Prérequis
 
-### Step 1: Download
+- **Java 21 ou supérieur** installé
+  - Vérifier : `java -version`
+  - Télécharger : https://www.oracle.com/java/technologies/downloads/
 
-Download `JTypoSquatting.jar` from the [releases page](https://github.com/hernic/JTypoSquatting/releases).
+---
 
-### Step 2: Run
+## Démarrage en 2 étapes (obligatoires)
+
+### Étape 1 — Démarrer le Backend (Terminal 1)
+
+Le backend est le serveur API REST/SSE qui effectue les analyses de domaines.
+Il doit être démarré **en premier** et doit rester actif pendant toute la session.
+
+```bash
+# Depuis la racine du projet
+./gradlew :backend:bootRun
+```
+
+Attendez le message confirmant le démarrage :
+```
+Started JTypoSquatting in X.XXX seconds (process running as PID XXXXX)
+Tomcat started on port 8080
+```
+
+> **Alternative (script tout-en-un) :**
+> ```bash
+> ./scripts/run.sh
+> ```
+
+---
+
+### Étape 2 — Lancer le Frontend (Terminal 2)
+
+Ouvrez un **second terminal** et lancez l'interface graphique :
 
 ```bash
 java -jar JTypoSquatting.jar
 ```
 
-### Step 3: Start Backend
+> **Depuis les sources :**
+> ```bash
+> ./gradlew :frontend:run
+> ```
 
-Open a **second terminal** and run:
-
-```bash
-# Navigate to project directory
-cd /path/to/JTypoSquatting
-
-# Start backend
-./gradlew :backend:bootRun
+L'interface Swing s'ouvre. Si le backend est bien démarré, la barre d'état affiche :
+```
+✅ Connecté à http://localhost:8080
 ```
 
-### Step 4: Use the Application
-
-1. Enter a domain (e.g., `www.example.com`)
-2. Click **Generate**
-3. Watch results stream in real-time
-4. Click on domains to see screenshots
+Si vous voyez un message d'erreur, vérifiez que l'Étape 1 est bien effectuée.
 
 ---
 
-## Option 2: Build from Source
-
-### Step 1: Clone Repository
+## Build depuis les sources
 
 ```bash
+# 1. Cloner
 git clone https://github.com/hernic/JTypoSquatting.git
 cd JTypoSquatting
-```
 
-### Step 2: Build
-
-```bash
+# 2. Compiler et packager
 ./gradlew clean build :frontend:copyFatJar
-```
 
-### Step 3: Run
-
-```bash
-# Terminal 1 - Backend
+# 3. Terminal 1 — Backend
 ./gradlew :backend:bootRun
 
-# Terminal 2 - Frontend
+# 4. Terminal 2 — Frontend
 java -jar JTypoSquatting.jar
 ```
 
 ---
 
-## First Domain Check
+## Première analyse de domaine
 
-### Example: Check www.google.com
-
-1. **Enter Domain:**
+1. **Saisir le domaine** (ex. `www.google.com`) dans le champ en haut
+2. Cliquer sur **Générer**
+3. Regarder les résultats s'afficher en temps réel :
    ```
-   Domain Name: www.google.com
+   Générés : 150 | Suspects : 45 | Inaccessibles : 105
    ```
-
-2. **Click Generate**
-
-3. **Watch Results:**
-   ```
-   Generated: 150 | HTTP up: 45 | Inaccessible: 105
-   ```
-
-4. **View Details:**
-   - Double-click any domain
-   - See screenshot, HTTP headers, metadata
+4. **Double-cliquer** sur un domaine pour voir les détails (screenshot, headers HTTP, métadonnées)
 
 ---
 
-## Common Tasks
+## Résolution des problèmes courants
 
-### Copy Domains to Clipboard
+### "Impossible de se connecter au serveur backend"
 
-1. Select domains in table (Ctrl+Click for multiple)
-2. Click **Copy** button or press `Ctrl+C`
-3. Paste in browser or text editor
+Le backend n'est pas démarré ou pas encore prêt.
 
-### Clear Results
-
-Click **Clear** button to reset everything.
-
-### View Logs
-
-- **Backend tab:** API logs
-- **Frontend tab:** UI logs
-
----
-
-## Troubleshooting
-
-### "Cannot connect to API"
-
-**Problem:** Backend not running
-
-**Solution:**
 ```bash
-# Start backend first
+# Terminal 1 : démarrer le backend
 ./gradlew :backend:bootRun
+# Attendre le message "Started on port 8080"
+# Puis relancer le frontend dans Terminal 2
 ```
 
-### "Java not found"
+### "Java not found" / "Commande introuvable"
 
-**Problem:** Java 21+ not installed
+Java 21+ n'est pas installé.
 
-**Solution:**
 ```bash
 # Ubuntu/Debian
 sudo apt install openjdk-21-jdk
 
-# Check installation
+# Vérification
 java -version
 ```
 
-### No Screenshots
+### Pas de screenshots / Fenêtre JavaFX introuvable
 
-**Problem:** JavaFX runtime issue
-
-**Solution:**
-- Ensure JDK 21+ includes JavaFX
-- Check backend logs for errors
+- Vérifier que le JDK 21 inclut JavaFX (ou ajouter `--module-path` JavaFX)
+- Consulter les logs backend dans l'onglet **Backend** de l'interface
 
 ---
 
-## Next Steps
-
-- Read [User Guide](USER_GUIDE.md) for detailed usage
-- Check [API Documentation](API.md) for REST API details
-- See [Configuration](DEPLOYMENT.md#5-configuration) for customization
-
----
-
-## Quick Reference
+## Référence rapide
 
 ```bash
-# Build
-./gradlew clean build
-
-# Run backend
+# Démarrer le backend
 ./gradlew :backend:bootRun
 
-# Run frontend
+# Lancer le frontend
 java -jar JTypoSquatting.jar
 
-# Create release JAR
-./gradlew :frontend:fatJar :frontend:copyFatJar
+# Build complet
+./gradlew clean build :frontend:copyFatJar
+
+# Tests unitaires (sans tests réseau)
+./gradlew test -Pexclude.network.tests=true
 ```
 
 ---
 
-*For complete documentation, see the [doc/](doc/) directory.*
+*Pour la documentation complète, voir le répertoire [doc/](.).*

@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class DomainResultDTO implements Serializable {
     private String domain;
-    private String status;
+    private DomainStatus status;
     private String title;
     private String language;
     private String description;
@@ -28,7 +28,7 @@ public class DomainResultDTO implements Serializable {
     public DomainResultDTO() {
     }
 
-    public DomainResultDTO(String domain, String status, String title, String language, String description, int httpCode, byte[] screenshot, String homepageText, Map<String, String> httpHeaders) {
+    public DomainResultDTO(String domain, DomainStatus status, String title, String language, String description, int httpCode, byte[] screenshot, String homepageText, Map<String, String> httpHeaders) {
         this.domain = domain;
         this.status = status;
         this.title = title;
@@ -49,11 +49,11 @@ public class DomainResultDTO implements Serializable {
         this.domain = domain;
     }
 
-    public String getStatus() {
+    public DomainStatus getStatus() {
         return status;
     }
 
-    public void setStatus(String status) {
+    public void setStatus(DomainStatus status) {
         this.status = status;
     }
 

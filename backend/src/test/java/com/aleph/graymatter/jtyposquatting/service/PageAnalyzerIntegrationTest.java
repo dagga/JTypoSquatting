@@ -3,6 +3,7 @@ package com.aleph.graymatter.jtyposquatting.service;
 import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -125,7 +126,7 @@ class PageAnalyzerIntegrationTest {
         // Status should be set based on HTTP code
         assertNotNull(result.getStatus(), "Status should not be null");
         assertTrue(
-            "Suspicious".equals(result.getStatus()) || "Safe".equals(result.getStatus()),
+            DomainStatus.SUSPICIOUS == result.getStatus() || DomainStatus.SAFE == result.getStatus(),
             "Status should be Suspicious or Safe for HTTP 200"
         );
 

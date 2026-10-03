@@ -3,6 +3,7 @@ package com.aleph.graymatter.jtyposquatting.service;
 import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -42,14 +43,14 @@ public class DomainCheckService {
                 // Determine status based on HTTP code
                 // HTTP 200 -> Suspicious (Red)
                 // Other HTTP codes -> Safe (Green)
-                String status = (pageData.getHttpCode() == 200) ? "Suspicious" : "Safe";
+                DomainStatus domainStatus = (pageData.getHttpCode() == 200) ? DomainStatus.SUSPICIOUS : DomainStatus.SAFE;
 
                 byte[] screenshot = pageData.getScreenshot();
                 System.out.println("[DomainCheck] Sending result for " + domain + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
 
                 return new DomainResultDTO(
                         domain,
-                        status,
+                        domainStatus,
                         title,
                         pageData.getDetectedLanguage(),
                         description,
@@ -62,7 +63,7 @@ public class DomainCheckService {
                 // No HTTP code (timeout, unknown host, etc.) -> Unreachable (should be removed from list)
                 return new DomainResultDTO(
                         domain,
-                        "Unreachable",
+                        DomainStatus.UNREACHABLE,
                         "",
                         "",
                         "Domain not reachable",
@@ -77,7 +78,7 @@ public class DomainCheckService {
             // Treat exceptions as "Unreachable"
             return new DomainResultDTO(
                     domain,
-                    "Unreachable",
+                    DomainStatus.UNREACHABLE,
                     "",
                     "",
                     "Error: " + e.getMessage(),

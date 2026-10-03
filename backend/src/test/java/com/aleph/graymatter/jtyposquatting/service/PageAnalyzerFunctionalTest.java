@@ -30,7 +30,7 @@ class PageAnalyzerFunctionalTest {
 
     @BeforeEach
     void setUp() {
-        pageAnalyzer = new PageAnalyzer();
+        pageAnalyzer = new PageAnalyzer(new JavaFXScreenshotService());
     }
 
     @Test

@@ -20,8 +20,10 @@ This directory contains complete documentation for JTypoSquatting.
 
 | Document | Description | Audience |
 |----------|-------------|----------|
+| [ARCHITECTURE_TECHNIQUE_ET_APPLICATIVE.md](ARCHITECTURE_TECHNIQUE_ET_APPLICATIVE.md) | Architecture technique et applicative complète avec 7 schémas UML Mermaid | Architectes, Développeurs, Tech Leads |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Software architecture (components, patterns, technology) | Architects, Developers |
 | [FUNCTIONAL_ARCHITECTURE.md](FUNCTIONAL_ARCHITECTURE.md) | Functional architecture (use cases, business logic) | Analysts, Product Owners |
+| [audit.md](audit.md) | Audit de code approfondi, analyse de sécurité, concurrence et plan de remédiation | Développeurs, Sécurité, QA |
 
 ### Technical Reference
 

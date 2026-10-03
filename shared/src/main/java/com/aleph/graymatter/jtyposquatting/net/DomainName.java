@@ -31,7 +31,11 @@ public final class DomainName {
     }
 
     private static boolean isValidDomain(String domainName) {
-        return domainName.contains(".") && domainName.indexOf('.') != domainName.length() - 1;
+        try {
+            return com.google.common.net.InternetDomainName.isValid(domainName);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public static boolean haveSubDomain(final String domain) {

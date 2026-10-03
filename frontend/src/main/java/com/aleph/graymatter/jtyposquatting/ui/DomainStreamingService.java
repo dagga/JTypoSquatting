@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.ui;
 
 import com.aleph.graymatter.jtyposquatting.client.JTypoSquattingRestClient;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.slf4j.Logger;
@@ -21,7 +22,14 @@ import java.util.function.Consumer;
 public class DomainStreamingService {
     private static final Logger logger = LoggerFactory.getLogger(DomainStreamingService.class);
     private final JTypoSquattingRestClient restClient;
-    private final Gson gson = new GsonBuilder().create();
+    private final Gson gson = new GsonBuilder()
+            .registerTypeAdapter(DomainStatus.class, new com.google.gson.JsonDeserializer<DomainStatus>() {
+                @Override
+                public DomainStatus deserialize(com.google.gson.JsonElement json, java.lang.reflect.Type typeOfT, com.google.gson.JsonDeserializationContext context) {
+                    return DomainStatus.fromString(json.getAsString());
+                }
+            })
+            .create();
     private final ExecutorService executorService;
     private final ScheduledExecutorService timeoutExecutor;
     private AutoCloseable activeStreamHandle;
@@ -101,7 +109,7 @@ public class DomainStreamingService {
                                 domainRowMap.put(result.getDomain(), totalCount.get());
                                 totalCount.incrementAndGet();
 
-                                if ("Testing...".equals(result.getStatus())) {
+                                if (DomainStatus.TESTING == result.getStatus()) {
                                     testingDomainTimestamps.put(result.getDomain(), System.currentTimeMillis());
                                     processingState.put(result.getDomain(), false); // Start as waiting (white)
                                     scheduleTimeoutCheck(result.getDomain());
@@ -109,10 +117,10 @@ public class DomainStreamingService {
                             } else {
                                 testingDomainTimestamps.remove(result.getDomain());
                                 processingState.remove(result.getDomain());
-                                String s = result.getStatus();
-                                if ("Active".equals(s) || "Suspicious".equals(s) || "Safe".equals(s)) {
+                                DomainStatus s = result.getStatus();
+                                if (DomainStatus.ACTIVE == s || DomainStatus.SUSPICIOUS == s || DomainStatus.SAFE == s) {
                                     activeCount.incrementAndGet();
-                                } else if ("Dead".equals(s) || "Unreachable".equals(s)) {
+                                } else if (DomainStatus.DEAD == s || DomainStatus.UNREACHABLE == s) {
                                     deadCount.incrementAndGet();
                                 }
                             }
@@ -168,7 +176,7 @@ public class DomainStreamingService {
 
                 // Notify UI immediately on the EDT - keep status as Testing... but it's now processing
                 SwingUtilities.invokeLater(() -> {
-                    DomainResultDTO processingUpdate = new DomainResultDTO(domain, "Testing...", "", "", "", -1, null, "", null);
+                    DomainResultDTO processingUpdate = new DomainResultDTO(domain, DomainStatus.TESTING, "", "", "", -1, null, "", null);
                     onDomainUpdate.accept(processingUpdate);
                 });
             }

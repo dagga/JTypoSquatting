@@ -4,6 +4,7 @@ import com.aleph.graymatter.jtyposquatting.client.JTypoSquattingRestClient;
 import com.aleph.graymatter.jtyposquatting.config.ClientConfig;
 import com.aleph.graymatter.jtyposquatting.config.ConfigManager;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.ui.renderers.FlagIconManager;
 
 import org.slf4j.Logger;
@@ -395,7 +396,7 @@ public class JTypoFrame extends JFrame {
     private void processDomainUpdate(DomainResultDTO result) {
         // Remove domains only if HTTP code is 0 (unreachable/dead)
         // Keep Testing... (-1) and Timeout domains in the grid
-        if (result.getHttpCode() == 0 && "Unreachable".equals(result.getStatus())) {
+        if (result.getHttpCode() == 0 && DomainStatus.UNREACHABLE == result.getStatus()) {
             // Search for the domain in the table by name
             int removeRow = -1;
             for (int i = 0; i < tableModel.getRowCount(); i++) {
@@ -449,7 +450,7 @@ public class JTypoFrame extends JFrame {
                     // Insert at specific position
                     tableModel.insertRow(insertRow, new Object[]{
                             result.getDomain(),
-                            result.getStatus(),
+                            result.getStatus().getLabel(),
                             result.getTitle(),
                             result.getLanguage(),
                             flag,
@@ -470,7 +471,7 @@ public class JTypoFrame extends JFrame {
                     // Add at the end
                     tableModel.addRow(new Object[]{
                             result.getDomain(),
-                            result.getStatus(),
+                            result.getStatus().getLabel(),
                             result.getTitle(),
                             result.getLanguage(),
                             flag,
@@ -484,14 +485,14 @@ public class JTypoFrame extends JFrame {
                 
                 jTableOutput.revalidate();
                 jTableOutput.repaint();
-                if ("Suspicious".equals(result.getStatus()) || "Safe".equals(result.getStatus())) {
+                if (DomainStatus.SUSPICIOUS == result.getStatus() || DomainStatus.SAFE == result.getStatus()) {
                     activeDomainCount.addAndGet(1);
                 }
             } else {
                 // Update existing domain
                 int row = domainRowMap.get(result.getDomain());
                 String oldStatus = (String) tableModel.getValueAt(row, 1);
-                String newStatus = result.getStatus();
+                String newStatus = result.getStatus().getLabel();
 
                 // Update counters based on status transition
                 if ("Active".equals(oldStatus)) {
@@ -516,7 +517,7 @@ public class JTypoFrame extends JFrame {
                     }
                 }
 
-                tableModel.setValueAt(result.getStatus(), row, 1);
+                tableModel.setValueAt(result.getStatus().getLabel(), row, 1);
                 tableModel.setValueAt(result.getTitle(), row, 2);
                 tableModel.setValueAt(result.getLanguage(), row, 3);
                 tableModel.setValueAt(getFlagForLanguage(result.getLanguage()), row, 4);
@@ -567,7 +568,7 @@ public class JTypoFrame extends JFrame {
      */
     private int calculateDomainPriority(DomainResultDTO result) {
         // Only HTTP 200 (Suspicious) domains get special priority
-        if (!"Suspicious".equals(result.getStatus())) {
+        if (DomainStatus.SUSPICIOUS != result.getStatus()) {
             return 10;
         }
         
@@ -799,7 +800,7 @@ public class JTypoFrame extends JFrame {
         if (data == null) {
             data = new DomainResultDTO();
             data.setDomain(domain);
-            data.setStatus((String) tableModel.getValueAt(modelRow, 1));
+            data.setStatus(DomainStatus.fromString((String) tableModel.getValueAt(modelRow, 1)));
             data.setTitle((String) tableModel.getValueAt(modelRow, 2));
             data.setLanguage((String) tableModel.getValueAt(modelRow, 3));
             data.setDescription((String) tableModel.getValueAt(modelRow, 4));

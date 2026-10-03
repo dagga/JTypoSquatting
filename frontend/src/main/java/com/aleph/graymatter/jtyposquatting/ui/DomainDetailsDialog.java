@@ -65,11 +65,23 @@ public class DomainDetailsDialog extends JDialog {
         }
 
         openBtn.addActionListener(e -> {
-            try {
-                String urlStr = data.getDomain().startsWith("http") ? data.getDomain() : "https://" + data.getDomain();
-                if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(URI.create(urlStr));
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this, "Failed to open browser: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            int result = JOptionPane.showConfirmDialog(
+                    this,
+                    "AVERTISSEMENT DE SÉCURITÉ :\n\nVous êtes sur le point de visiter un domaine potentiellement malveillant (typosquatting).\n\n" +
+                    "Ouvrir cette URL (" + data.getDomain() + ") dans votre navigateur peut exposer votre machine ou vos données à des risques.\n\n" +
+                    "Êtes-vous absolument sûr de vouloir continuer ?",
+                    "Avertissement de Sécurité",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+            );
+
+            if (result == JOptionPane.YES_OPTION) {
+                try {
+                    String urlStr = data.getDomain().startsWith("http") ? data.getDomain() : "https://" + data.getDomain();
+                    if (Desktop.isDesktopSupported()) Desktop.getDesktop().browse(URI.create(urlStr));
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(this, "Failed to open browser: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                }
             }
         });
 
@@ -96,16 +108,16 @@ public class DomainDetailsDialog extends JDialog {
 
         // Status LED
         Color ledColor = switch (data.getStatus()) {
-            case "Suspicious" -> new Color(255, 80, 80); // Red
-            case "Safe" -> new Color(100, 200, 100); // Green
-            case "Checking", "Testing..." -> new Color(255, 165, 0); // Orange
+            case SUSPICIOUS -> new Color(255, 80, 80); // Red
+            case SAFE -> new Color(100, 200, 100); // Green
+            case TESTING -> new Color(255, 165, 0); // Orange
             case null, default -> new Color(200, 200, 200); // Grey
         };
 
         JLabel ledLabel = new JLabel(new LedIcon(ledColor, 20));
         header.add(ledLabel);
 
-        JLabel lbl = new JLabel("Details for " + data.getDomain() + "    [" + data.getStatus() + "]");
+        JLabel lbl = new JLabel("Details for " + data.getDomain() + "    [" + data.getStatus().getLabel() + "]");
         lbl.setFont(lbl.getFont().deriveFont(Font.BOLD, 14f));
         header.add(lbl);
         return header;

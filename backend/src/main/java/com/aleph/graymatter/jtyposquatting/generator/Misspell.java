@@ -3,9 +3,8 @@ package com.aleph.graymatter.jtyposquatting.generator;
 import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.net.DomainName;
 import com.aleph.graymatter.jtyposquatting.util.JSonUtils;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -20,7 +19,7 @@ import java.util.Set;
 
 public class Misspell {
 
-    private static final JSONParser jsonP = new JSONParser();
+
     private static volatile java.util.Map<String, java.util.List<String>> misspellingsMap;
     private static final Object lock = new Object();
 
@@ -39,7 +38,7 @@ public class Misspell {
                 java.io.InputStream is = Misspell.class.getClassLoader().getResourceAsStream("common-misspellings.json");
                 if (is != null) {
                     try (InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8)) {
-                        misspellingsMap = JSonUtils.KeysValuesSwapMulti((JSONObject) jsonP.parse(reader));
+                        misspellingsMap = JSonUtils.KeysValuesSwapMulti(JsonParser.parseReader(reader).getAsJsonObject());
                         return misspellingsMap;
                     }
                 }
@@ -57,7 +56,7 @@ public class Misspell {
                     path = Paths.get(System.getProperty("user.dir"), "common-misspellings.json");
                 }
                 if (Files.exists(path)) {
-                    misspellingsMap = JSonUtils.KeysValuesSwapMulti((JSONObject) jsonP.parse(Files.newBufferedReader(path)));
+                    misspellingsMap = JSonUtils.KeysValuesSwapMulti(JsonParser.parseReader(Files.newBufferedReader(path)).getAsJsonObject());
                     return misspellingsMap;
                 }
             } catch (Exception e) {

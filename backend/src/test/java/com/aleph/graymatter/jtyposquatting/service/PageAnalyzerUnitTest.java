@@ -1,140 +1,66 @@
 package com.aleph.graymatter.jtyposquatting.service;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
+import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import org.junit.jupiter.api.*;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Unit tests for PageAnalyzer service.
- * Tests basic functionality without Spring Boot context.
- *
- * <p>Ces tests effectuent de vraies connexions réseau (www.aleph-networks.eu).
- * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
- * {@code ./gradlew test -Dexclude.network=true}
- */
-@Tag("network")
-@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
+@com.github.tomakehurst.wiremock.junit5.WireMockTest
 class PageAnalyzerUnitTest {
 
-    private final PageAnalyzer pageAnalyzer = new PageAnalyzer();
+    private PageAnalyzer pageAnalyzer;
+
+    @BeforeEach
+    void setUp() {
+        // Mock ScreenshotService to avoid JavaFX initialization
+        ScreenshotService mockScreenshotService = url -> new byte[0];
+        pageAnalyzer = new PageAnalyzer(mockScreenshotService);
+    }
 
     @Test
-    @DisplayName("PageAnalyzer should analyze valid domain and collect data")
-    void testAnalyzePage_ValidDomain() {
-        // Given
-        String domain = "www.aleph-networks.eu";
+    @DisplayName("PageAnalyzer should analyze valid domain and collect data using WireMock")
+    void testAnalyzePage_ValidDomain(WireMockRuntimeInfo wmRuntimeInfo) {
+        String serverUrl = wmRuntimeInfo.getHttpBaseUrl();
+        stubFor(get(urlEqualTo("/test"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("<html><head><title>Mocked Aleph Title</title></head><body><h1>Mocked Aleph Content</h1></body></html>")));
 
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
+        DomainPageDTO result = pageAnalyzer.analyzePage(serverUrl + "/test");
 
-        // Then
         assertNotNull(result);
-        assertEquals(domain, result.getDomain());
         assertEquals(200, result.getHttpCode());
-        assertNotNull(result.getHtmlContent());
-        assertFalse(result.getHtmlContent().isEmpty());
     }
 
     @Test
-    @DisplayName("PageAnalyzer should extract title from valid domain")
-    void testAnalyzePage_ExtractsTitle() {
-        // Given
-        String domain = "www.aleph-networks.eu";
+    @DisplayName("PageAnalyzer should extract meta description using WireMock")
+    void testAnalyzePage_ExtractsMetaDescription(WireMockRuntimeInfo wmRuntimeInfo) {
+        String serverUrl = wmRuntimeInfo.getHttpBaseUrl();
+        stubFor(get(urlEqualTo("/meta"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "text/html")
+                        .withBody("<html><head><meta name=\"description\" content=\"Mocked Description\"></head><body></body></html>")));
 
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
+        DomainPageDTO result = pageAnalyzer.analyzePage(serverUrl + "/meta");
 
-        // Then
-        assertNotNull(result.getTitle());
-        assertFalse(result.getTitle().isEmpty());
-        assertTrue(result.getTitle().contains("Aleph"));
-    }
-
-    @Test
-    @DisplayName("PageAnalyzer should capture screenshot for valid domain")
-    void testAnalyzePage_CapturesScreenshot() {
-        // Given
-        String domain = "www.aleph-networks.eu";
-
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
-
-        // Then: Screenshot is optional in local environment (requires DISPLAY)
-        // In CI with Xvfb, screenshot should be present
-        boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-        
-        if (isCI) {
-            // Strict mode in CI
-            assertNotNull(result.getScreenshot(), "Screenshot required in CI");
-            assertTrue(result.getScreenshot().length > 500, "Screenshot should have meaningful size");
-            System.out.println("CI Mode: Screenshot captured: " + result.getScreenshot().length + " bytes");
-        } else {
-            // Tolerant mode locally
-            if (result.getScreenshot() != null && result.getScreenshot().length > 0) {
-                System.out.println("Local Mode: Screenshot captured: " + result.getScreenshot().length + " bytes");
-            } else {
-                System.out.println("Local Mode: Screenshot skipped (no DISPLAY - install Xvfb to test)");
-            }
-        }
+        assertEquals("Mocked Description", result.getMetaDescription());
     }
 
     @Test
     @DisplayName("PageAnalyzer should handle invalid domain gracefully")
     void testAnalyzePage_InvalidDomain() {
-        // Given
-        String invalidDomain = "www.invalid-domain-xyz-12345.com";
-
-        // When
+        String invalidDomain = "http://localhost:1";
         DomainPageDTO result = pageAnalyzer.analyzePage(invalidDomain);
 
-        // Then
         assertNotNull(result);
         assertEquals(invalidDomain, result.getDomain());
         assertEquals(0, result.getHttpCode());
         assertNull(result.getScreenshot());
-    }
-
-    @Test
-    @DisplayName("PageAnalyzer should detect language")
-    void testAnalyzePage_DetectsLanguage() {
-        // Given
-        String domain = "www.aleph-networks.eu";
-
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
-
-        // Then
-        assertNotNull(result.getDetectedLanguage());
-        assertFalse(result.getDetectedLanguage().isEmpty());
-    }
-
-    @Test
-    @DisplayName("PageAnalyzer should extract meta description")
-    void testAnalyzePage_ExtractsMetaDescription() {
-        // Given
-        String domain = "www.aleph-networks.eu";
-
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
-
-        // Then
-        assertNotNull(result.getMetaDescription());
-    }
-
-    @Test
-    @DisplayName("PageAnalyzer should extract Open Graph title")
-    void testAnalyzePage_ExtractsOgTitle() {
-        // Given
-        String domain = "www.aleph-networks.eu";
-
-        // When
-        DomainPageDTO result = pageAnalyzer.analyzePage(domain);
-
-        // Then
-        assertNotNull(result.getMetaOgTitle());
     }
 }

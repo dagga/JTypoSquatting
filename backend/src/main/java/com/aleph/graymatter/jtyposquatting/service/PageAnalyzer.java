@@ -4,15 +4,6 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.github.pemistahl.lingua.api.Language;
 import com.github.pemistahl.lingua.api.LanguageDetector;
 import com.github.pemistahl.lingua.api.LanguageDetectorBuilder;
-import javafx.application.Platform;
-import javafx.concurrent.Worker;
-import javafx.embed.swing.SwingFXUtils;
-import javafx.scene.Scene;
-import javafx.scene.image.WritableImage;
-import javafx.scene.layout.VBox;
-import javafx.scene.web.WebView;
-import javafx.stage.Stage;
-import javafx.stage.StageStyle;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -20,19 +11,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import javax.imageio.ImageIO;
-import java.awt.*;
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static java.lang.Thread.sleep;
 
 @Service
 public class PageAnalyzer {
@@ -54,57 +36,11 @@ public class PageAnalyzer {
             )
             .build();
 
-    private static volatile boolean javafxInitialized = false;
-    private static final Object javafxLock = new Object();
+    private final ScreenshotService screenshotService;
 
-    private static void initJavaFXIfNeeded() {
-        if (javafxInitialized) return;
-
-        synchronized (javafxLock) {
-            if (javafxInitialized) return;
-
-            try {
-                String display = System.getenv("DISPLAY");
-                boolean hasDisplay = display != null && !display.isEmpty();
-                String existingPrismOrder = System.getProperty("prism.order");
-                logger.debug("Initializing JavaFX (DISPLAY={}, prism.order={})", display, existingPrismOrder);
-
-                System.setProperty("prism.vsync", "false");
-                System.setProperty("prism.forceGPU", "false");
-
-                if (hasDisplay) {
-                    System.setProperty("glass.platform", "gtk");
-                    logger.debug("Using GTK glass platform");
-                } else {
-                    System.setProperty("glass.platform", "monocle");
-                    System.setProperty("java.awt.headless", "false");
-                    logger.debug("Using monocle glass platform (no DISPLAY)");
-                }
-
-                CountDownLatch initLatch = new CountDownLatch(1);
-                Platform.startup(() -> {
-                    javafxInitialized = true;
-                    initLatch.countDown();
-                    logger.debug("JavaFX initialized successfully");
-                });
-
-                if (!initLatch.await(10, TimeUnit.SECONDS)) {
-                    throw new RuntimeException("JavaFX initialization timeout");
-                }
-
-            } catch (IllegalStateException e) {
-                if (e.getMessage() != null && e.getMessage().contains("Toolkit already initialized")) {
-                    javafxInitialized = true;
-                    logger.debug("JavaFX already initialized");
-                } else {
-                    logger.error("JavaFX initialization failed: {}", e.getMessage());
-                    throw new RuntimeException("Failed to initialize JavaFX: " + e.getMessage(), e);
-                }
-            } catch (Exception e) {
-                logger.error("JavaFX initialization error: {}", e.getMessage());
-                throw new RuntimeException("Failed to initialize JavaFX: " + e.getMessage(), e);
-            }
-        }
+    @org.springframework.beans.factory.annotation.Autowired
+    public PageAnalyzer(ScreenshotService screenshotService) {
+        this.screenshotService = screenshotService;
     }
 
     public DomainPageDTO analyzePage(String domain) {
@@ -118,7 +54,7 @@ public class PageAnalyzer {
         DomainPageDTO data = new DomainPageDTO(domain);
 
         try {
-            URL url = new URL("https://" + domain);
+            URL url = new URL(domain.startsWith("http") ? domain : "https://" + domain);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.setConnectTimeout(3000);
@@ -152,7 +88,6 @@ public class PageAnalyzer {
                     }, new java.security.SecureRandom());
                     httpsConn.setSSLSocketFactory(sc.getSocketFactory());
                 } catch (Exception ignored) {
-                    // Ignore SSL initialization errors
                 }
             }
 
@@ -203,7 +138,6 @@ public class PageAnalyzer {
                     if (detectedLang != Language.UNKNOWN) {
                         data.setDetectedLanguage(detectedLang.name());
                     } else {
-                        // If language detection fails, try with a longer text sample
                         String longerText = textContent.length() > 1000 ? textContent.substring(0, 1000) : textContent;
                         detectedLang = LANGUAGE_DETECTOR.detectLanguageOf(longerText);
                         if (detectedLang != Language.UNKNOWN) {
@@ -212,28 +146,16 @@ public class PageAnalyzer {
                     }
                 }
 
-                if (Thread.currentThread().isInterrupted()) {
-                    logger.debug("Analysis cancelled for {} (interrupted before screenshot)", domain);
-                    connection.disconnect();
-                    data.setHttpCode(0);
-                    return data;
-                }
-
                 if (responseCode >= 200 && responseCode < 300 && html != null && !html.trim().isEmpty()) {
                     int textLength = textContent != null ? textContent.length() : 0;
-                    logger.debug("Checking screenshot conditions for {} (HTTP={}, textLength={})", domain, responseCode, textLength);
-
                     if (textLength >= 5) {
-                        byte[] screenshot = captureScreenshot(url);
+                        byte[] screenshot = screenshotService.captureScreenshot(url);
                         data.setScreenshot(screenshot);
-                        logger.debug("Screenshot captured for {}: {} bytes", domain, screenshot != null ? screenshot.length : 0);
                     } else {
                         data.setScreenshot(null);
-                        logger.debug("No screenshot (text too short: {} chars) for {}", textLength, domain);
                     }
                 } else {
                     data.setScreenshot(null);
-                    logger.debug("No screenshot (HTTP {}) for {}", responseCode, domain);
                 }
             }
             connection.disconnect();
@@ -259,254 +181,6 @@ public class PageAnalyzer {
                 linesRead++;
             }
             return sb.toString();
-        }
-    }
-
-    /**
-     * Capture a screenshot of the page using JavaFX WebView.
-     * Renders the page and captures the visible portion as an image.
-     */
-    private static byte[] captureScreenshot(URL url) {
-        logger.debug("captureScreenshot() called for {}", url);
-
-        try {
-            initJavaFXIfNeeded();
-
-            if (!javafxInitialized) {
-                logger.error("JavaFX not initialized after initJavaFXIfNeeded, returning placeholder");
-                return createPlaceholderScreenshot("JavaFX initialization failed");
-            }
-
-            CountDownLatch latch = new CountDownLatch(1);
-            AtomicReference<byte[]> result = new AtomicReference<>();
-            AtomicReference<Exception> captureException = new AtomicReference<>();
-            AtomicReference<String> failureReason = new AtomicReference<>();
-
-            logger.debug("Starting screenshot capture for {}", url);
-
-            Platform.runLater(() -> {
-                logger.debug("Platform.runLater() executed for {}", url);
-                try {
-                    // Create stage with DECORATED style for proper rendering
-                    Stage stage = new Stage(StageStyle.DECORATED);
-                    stage.setWidth(1280);
-                    stage.setHeight(800);
-                    stage.setResizable(false);
-                    stage.setX(100);
-                    stage.setY(100);
-
-                    WebView webView = new WebView();
-                    webView.setPrefSize(1280, 800);
-                    webView.getEngine().setJavaScriptEnabled(true);
-
-                    // Set a user agent string for better compatibility
-                    webView.getEngine().setUserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-
-                    VBox root = new VBox();
-                    root.getChildren().add(webView);
-
-                    Scene scene = new Scene(root, 1280, 800);
-                    scene.setFill(javafx.scene.paint.Color.WHITE);
-                    stage.setScene(scene);
-
-                    // Show and focus before loading
-                    stage.show();
-                    stage.toFront();
-                    stage.requestFocus();
-
-                    logger.debug("Stage shown, waiting for pulse");
-
-                    // Wait for JavaFX pulse (first rendering)
-                    CountDownLatch pulseLatch = new CountDownLatch(1);
-                    javafx.animation.PauseTransition pulseDelay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(200));
-                    pulseDelay.setOnFinished(e -> pulseLatch.countDown());
-                    pulseDelay.play();
-                    pulseLatch.await(2, java.util.concurrent.TimeUnit.SECONDS);
-
-                    logger.debug("Loading URL: {}", url);
-
-                    // Load the URL
-                    webView.getEngine().load(url.toString());
-
-                    webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
-                        if (newState == Worker.State.SUCCEEDED) {
-                            logger.debug("Page loaded successfully, scheduling non-blocking snapshot");
-
-                            javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(1200));
-                            delay.setOnFinished(ev -> {
-                                try {
-                                    int contentWidth = 1280;
-                                    int contentHeight = 800;
-
-                                    try {
-                                        org.w3c.dom.Document doc = webView.getEngine().getDocument();
-                                        if (doc != null) {
-                                            org.w3c.dom.Element body = doc.getDocumentElement();
-                                            if (body != null) {
-                                                String width = body.getAttribute("scrollWidth");
-                                                String height = body.getAttribute("scrollHeight");
-                                                if (width != null && !width.isEmpty()) {
-                                                    contentWidth = Math.max(800, Math.min(Integer.parseInt(width), 1280));
-                                                }
-                                                if (height != null && !height.isEmpty()) {
-                                                    contentHeight = Math.max(600, Math.min(Integer.parseInt(height), 800));
-                                                }
-                                            }
-                                        }
-                                    } catch (Exception ignored) {}
-
-                                    webView.setPrefSize(contentWidth, contentHeight);
-                                    scene.getRoot().requestLayout();
-
-                                    logger.debug("Capturing snapshot: {}x{}", contentWidth, contentHeight);
-                                    javafx.scene.SnapshotParameters params = new javafx.scene.SnapshotParameters();
-                                    params.setFill(javafx.scene.paint.Color.WHITE);
-                                    WritableImage fxImage = new WritableImage(contentWidth, contentHeight);
-                                    webView.snapshot(params, fxImage);
-
-                                    // Check pixel data to detect empty/white screenshots
-                                    javafx.scene.image.PixelReader pixelReader = fxImage.getPixelReader();
-                                    boolean hasContent = false;
-                                    if (pixelReader != null) {
-                                        for (int y = 0; y < contentHeight && !hasContent; y += Math.max(1, contentHeight / 20)) {
-                                            for (int x = 0; x < contentWidth && !hasContent; x += Math.max(1, contentWidth / 20)) {
-                                                javafx.scene.paint.Color pixelColor = pixelReader.getColor(x, y);
-                                                if (pixelColor.getRed() < 0.99 || pixelColor.getGreen() < 0.99 || pixelColor.getBlue() < 0.99) {
-                                                    hasContent = true;
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    if (!hasContent) {
-                                        byte[] placeholder = createPlaceholderScreenshot("Page rendered empty");
-                                        result.set(placeholder);
-                                        latch.countDown();
-                                        stage.close();
-                                        return;
-                                    }
-
-                                    // Create thumbnail
-                                    BufferedImage thumbnail = new BufferedImage(320, 240, BufferedImage.TYPE_INT_RGB);
-                                    Graphics2D g2d = thumbnail.createGraphics();
-                                    g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                                    g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
-                                    g2d.setColor(java.awt.Color.WHITE);
-                                    g2d.fillRect(0, 0, 320, 240);
-
-                                    BufferedImage capturedImage = SwingFXUtils.fromFXImage(fxImage, null);
-                                    if (capturedImage != null) {
-                                        g2d.drawImage(capturedImage, 0, 0, 320, 240, null);
-                                    }
-                                    g2d.dispose();
-
-                                    try {
-                                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                        ImageIO.write(thumbnail, "png", baos);
-                                        byte[] screenshotData = baos.toByteArray();
-                                        if (screenshotData.length > 0) {
-                                            result.set(screenshotData);
-                                        } else {
-                                            failureReason.set("Screenshot data is empty");
-                                        }
-                                    } catch (Exception e) {
-                                        failureReason.set("Error writing screenshot: " + e.getMessage());
-                                    }
-                                    latch.countDown();
-                                    stage.close();
-                                } catch (Exception ex) {
-                                    captureException.set(ex);
-                                    latch.countDown();
-                                    stage.close();
-                                }
-                            });
-                            delay.play();
-                        } else if (newState == Worker.State.FAILED) {
-                            logger.error("Page load failed for screenshot: {}", url);
-                            failureReason.set("Page load failed");
-                            latch.countDown();
-                            stage.close();
-                        }
-                    });
-                } catch (Exception e) {
-                    captureException.set(e);
-                    logger.error("Error in captureScreenshot: {}", e.getMessage());
-                    latch.countDown();
-                }
-            });
-
-            try {
-                // Wait with timeout, but check for interruption periodically
-                for (int i = 0; i < 30; i++) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        logger.debug("Screenshot wait interrupted (latch) for {}", url);
-                        return null;
-                    }
-                    if (latch.await(1, TimeUnit.SECONDS)) {
-                        break;
-                    }
-                }
-
-                if (result.get() != null) {
-                    return result.get();
-                } else {
-                    Exception ex = captureException.get();
-                    if (ex != null) {
-                        logger.error("Screenshot capture completed but result is null. Exception: {}", ex.getMessage());
-                    } else {
-                        String reason = failureReason.get();
-                        if (reason != null) {
-                            logger.error("Screenshot capture failed: {}", reason);
-                        } else {
-                            logger.error("Screenshot capture completed but result is null (no exception)");
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                logger.error("Error waiting for screenshot capture: {}", e.getMessage());
-            }
-            return null;
-        } catch (Exception e) {
-            logger.error("Fatal error in captureScreenshot: {}", e.getMessage());
-            // Return placeholder instead of null
-            return createPlaceholderScreenshot("Error: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Create a placeholder screenshot with error message.
-     */
-    private static byte[] createPlaceholderScreenshot(String message) {
-        try {
-            BufferedImage placeholder = new BufferedImage(320, 240, BufferedImage.TYPE_INT_RGB);
-            Graphics2D g2d = placeholder.createGraphics();
-            
-            // White background
-            g2d.setColor(java.awt.Color.WHITE);
-            g2d.fillRect(0, 0, 320, 240);
-            
-            // Red border for error
-            g2d.setColor(java.awt.Color.RED);
-            g2d.setStroke(new java.awt.BasicStroke(3));
-            g2d.drawRect(5, 5, 310, 230);
-            
-            // Error text
-            g2d.setColor(java.awt.Color.RED);
-            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 14));
-            g2d.drawString("Screenshot unavailable", 70, 100);
-            
-            g2d.setColor(java.awt.Color.GRAY);
-            g2d.setFont(new java.awt.Font("Arial", java.awt.Font.PLAIN, 10));
-            g2d.drawString(message.length() > 40 ? message.substring(0, 40) + "..." : message, 20, 130);
-            
-            g2d.dispose();
-            
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            ImageIO.write(placeholder, "png", baos);
-            return baos.toByteArray();
-        } catch (Exception e) {
-            logger.error("Error creating placeholder: {}", e.getMessage());
-            return null;
         }
     }
 }

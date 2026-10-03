@@ -24,8 +24,8 @@ public class Dash {
             if (uniqueDomains.add(newDomain)) {
                 try {
                     resultList.add(new DomainName(newDomain));
-                } catch (InvalidDomainException e) {
-                    throw new RuntimeException(e);
+                } catch (InvalidDomainException ignored) {
+                    // Ignore invalid domains generated
                 }
             }
         }
@@ -51,8 +51,8 @@ public class Dash {
         if (uniqueDomains.add(newDomain)) {
             try {
                 resultList.add(new DomainName(newDomain));
-            } catch (InvalidDomainException e) {
-                throw new RuntimeException(e);
+            } catch (InvalidDomainException ignored) {
+                // Ignore invalid domains generated
             }
         }
     }

@@ -4,6 +4,7 @@ import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
 import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
+import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,7 +76,7 @@ public class TypoSquattingController {
                     if (Thread.currentThread().isInterrupted()) {
                         break;
                     }
-                    DomainResultDTO initialResult = new DomainResultDTO(generatedDomain, "Testing...", "", "", "", -1, null, "", Collections.emptyMap());
+                    DomainResultDTO initialResult = new DomainResultDTO(generatedDomain, DomainStatus.TESTING, "", "", "", -1, null, "", Collections.emptyMap());
                     sendSseEvent(emitter, initialResult);
                     sleep(2);
                 }
