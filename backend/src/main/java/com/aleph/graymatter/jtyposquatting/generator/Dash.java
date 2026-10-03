@@ -10,15 +10,22 @@ import java.util.Set;
 // it would not work with domain names like xxx.yyy.www.zz domains with www.yyy has subdomain
 public class Dash {
     public static void addDash(DomainName domainName, ArrayList<DomainName> resultList) {
-        String domainWithoutSubDomainMinusTLD = DomainName.getDomainWithoutSubDomainMinusTLD(domainName.toString());
-        String subDomain = domainName.getSubDomain();
+        String fullDomain = domainName.toString();
         String tld = domainName.getTLD();
+        String base = fullDomain.substring(0, fullDomain.length() - tld.length() - 1);
+        
+        String subDomain = "";
+        String domain = base;
+        if (base.contains(".")) {
+            subDomain = base.substring(0, base.lastIndexOf("."));
+            domain = base.substring(base.lastIndexOf(".") + 1);
+        }
+        
         Set<String> uniqueDomains = new HashSet<>();
+        String prefix = (!subDomain.isEmpty()) ? subDomain + "." : "";
 
-        String prefix = (subDomain != null && !subDomain.isEmpty()) ? subDomain + "." : "";
-
-        for (int i = 1; i < domainWithoutSubDomainMinusTLD.length(); i++) {
-            StringBuilder sb = new StringBuilder(domainWithoutSubDomainMinusTLD);
+        for (int i = 1; i < domain.length(); i++) {
+            StringBuilder sb = new StringBuilder(domain);
             sb.insert(i, '-');
             String newDomain = prefix + sb + '.' + tld;
             if (uniqueDomains.add(newDomain)) {
@@ -32,28 +39,31 @@ public class Dash {
     }
 
     public static void removeDash(DomainName domainName, ArrayList<DomainName> resultList) {
-        String domainWithoutSubDomainMinusTLD = DomainName.getDomainWithoutSubDomainMinusTLD(domainName.toString());
-        if (!domainWithoutSubDomainMinusTLD.contains("-")) {
+        String fullDomain = domainName.toString();
+        String tld = domainName.getTLD();
+        String base = fullDomain.substring(0, fullDomain.length() - tld.length() - 1);
+        
+        String subDomain = "";
+        String domain = base;
+        if (base.contains(".")) {
+            subDomain = base.substring(0, base.lastIndexOf("."));
+            domain = base.substring(base.lastIndexOf(".") + 1);
+        }
+        
+        if (!domain.contains("-")) {
             return; // No dash to remove, early exit
         }
 
-        String subDomain = domainName.getSubDomain();
-        String tld = domainName.getTLD();
-        Set<String> uniqueDomains = new HashSet<>();
-        String prefix = (subDomain != null && !subDomain.isEmpty()) ? subDomain + "." : "";
-
         // Remove all dashes at once
-        StringBuilder sb = new StringBuilder(domainWithoutSubDomainMinusTLD);
+        StringBuilder sb = new StringBuilder(domain);
         while (sb.indexOf("-") != -1) {
             sb.delete(sb.indexOf("-"), sb.indexOf("-") + 1);
         }
-        String newDomain = prefix + sb + '.' + tld;
-        if (uniqueDomains.add(newDomain)) {
-            try {
-                resultList.add(new DomainName(newDomain));
-            } catch (InvalidDomainException ignored) {
-                // Ignore invalid domains generated
-            }
+        String newDomain = (!subDomain.isEmpty() ? subDomain + "." : "") + sb + '.' + tld;
+        try {
+            resultList.add(new DomainName(newDomain));
+        } catch (InvalidDomainException ignored) {
+            // Ignore invalid domains generated
         }
     }
 

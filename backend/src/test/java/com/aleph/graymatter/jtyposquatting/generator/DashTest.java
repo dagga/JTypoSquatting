@@ -54,8 +54,9 @@ class DashTest {
 
         // Tous les résultats doivent commencer par "www."
         for (DomainName variant : result) {
-            assertTrue(variant.toString().startsWith("www."),
-                    "Sous-domaine 'www' absent : " + variant);
+            String s = variant.toString();
+            assertTrue(s.startsWith("www."),
+                    "Sous-domaine 'www' absent : " + s + " Original: " + dn);
         }
     }
 
