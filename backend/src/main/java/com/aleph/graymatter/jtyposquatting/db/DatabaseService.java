@@ -1,11 +1,12 @@
 package com.aleph.graymatter.jtyposquatting.db;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
-import org.h2.tools.Server;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.sql.*;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -15,42 +16,24 @@ import jakarta.annotation.PreDestroy;
 
 @Component
 public class DatabaseService {
-    private Connection connection;
-    private Server h2Server;
+    private final com.google.gson.Gson gson = new com.google.gson.Gson();
 
-    @Value("${spring.datasource.url:jdbc:h2:file:./typosquatting_db}")
-    private String datasourceUrl;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @PostConstruct
-    public void init() throws SQLException {
-        try {
-            Class.forName("org.h2.Driver");
-        } catch (ClassNotFoundException e) {
-            throw new SQLException("H2 driver not found", e);
-        }
-
-        // Use configured database URL (file for production, mem for tests)
-        connection = DriverManager.getConnection(datasourceUrl, "sa", "");
-        h2Server = null;
-
+    public void init() {
         initializeTable();
-
         // Clear database at startup to ensure clean state
         deleteAll();
     }
 
     @PreDestroy
     public void close() {
-        try {
-            if (connection != null && !connection.isClosed()) {
-                connection.close();
-            }
-        } catch (SQLException e) {
-            // ignore
-        }
+        // No persistent connection held
     }
 
-    private void initializeTable() throws SQLException {
+    private void initializeTable() {
         String sql = """
             CREATE TABLE IF NOT EXISTS domain_page_data (
                 domain VARCHAR(255) PRIMARY KEY,
@@ -68,87 +51,58 @@ public class DatabaseService {
                 screenshot BLOB
             )
             """;
-        try (Statement stmt = connection.createStatement()) {
-            stmt.execute(sql);
-        }
+        jdbcTemplate.execute(sql);
     }
 
-    public void save(DomainPageDTO data) throws SQLException {
+    public void save(DomainPageDTO data) {
         String sql = """
             MERGE INTO domain_page_data (domain, html_content, text_content, meta_description,
                 meta_keywords, meta_author, meta_og_title, meta_og_description,
                 detected_language, timestamp, http_code, http_headers, screenshot)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, data.getDomain());
-            ps.setString(2, data.getHtmlContent());
-            ps.setString(3, data.getTextContent());
-            ps.setString(4, data.getMetaDescription());
-            ps.setString(5, data.getMetaKeywords());
-            ps.setString(6, data.getMetaAuthor());
-            ps.setString(7, data.getMetaOgTitle());
-            ps.setString(8, data.getMetaOgDescription());
-            ps.setString(9, data.getDetectedLanguage());
-            ps.setLong(10, data.getTimestamp());
-            ps.setInt(11, data.getHttpCode());
-            ps.setString(12, data.getHttpHeaders() != null ? new com.google.gson.Gson().toJson(data.getHttpHeaders()) : null);
-            ps.setBytes(13, data.getScreenshot());
-            ps.executeUpdate();
-        }
+        jdbcTemplate.update(sql,
+            data.getDomain(),
+            data.getHtmlContent(),
+            data.getTextContent(),
+            data.getMetaDescription(),
+            data.getMetaKeywords(),
+            data.getMetaAuthor(),
+            data.getMetaOgTitle(),
+            data.getMetaOgDescription(),
+            data.getDetectedLanguage(),
+            data.getTimestamp(),
+            data.getHttpCode(),
+            data.getHttpHeaders() != null ? gson.toJson(data.getHttpHeaders()) : null,
+            data.getScreenshot()
+        );
     }
-    public Optional<DomainPageDTO> findByDomain(String domain) throws SQLException {
+
+    public Optional<DomainPageDTO> findByDomain(String domain) {
         String sql = "SELECT * FROM domain_page_data WHERE domain = ?";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, domain);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return Optional.of(mapResultSetToDomainPageData(rs));
-                }
-            }
-        }
-        return Optional.empty();
+        List<DomainPageDTO> results = jdbcTemplate.query(sql, (rs, rowNum) -> mapResultSetToDomainPageData(rs), domain);
+        return results.stream().findFirst();
     }
 
-    public List<DomainPageDTO> findAll() throws SQLException {
-        List<DomainPageDTO> results = new ArrayList<>();
+    public List<DomainPageDTO> findAll() {
         String sql = "SELECT * FROM domain_page_data";
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            while (rs.next()) {
-                results.add(mapResultSetToDomainPageData(rs));
-            }
-        }
-        return results;
+        return jdbcTemplate.query(sql, (rs, rowNum) -> mapResultSetToDomainPageData(rs));
     }
 
-    public void deleteByDomain(String domain) throws SQLException {
+    public void deleteByDomain(String domain) {
         String sql = "DELETE FROM domain_page_data WHERE domain = ?";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
-            ps.setString(1, domain);
-            ps.executeUpdate();
-        }
+        jdbcTemplate.update(sql, domain);
     }
 
-    public int count() throws SQLException {
+    public int count() {
         String sql = "SELECT COUNT(*) FROM domain_page_data";
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        }
-        return 0;
+        return jdbcTemplate.queryForObject(sql, Integer.class);
     }
 
-    public void deleteAll() throws SQLException {
+    public void deleteAll() {
         String sql = "DELETE FROM domain_page_data";
-        try (Statement stmt = connection.createStatement()) {
-            stmt.executeUpdate(sql);
-        }
+        jdbcTemplate.update(sql);
     }
-
-
 
     private DomainPageDTO mapResultSetToDomainPageData(ResultSet rs) throws SQLException {
         DomainPageDTO data = new DomainPageDTO();
@@ -167,7 +121,6 @@ public class DatabaseService {
         String headersJson = rs.getString("http_headers");
         if (headersJson != null && !headersJson.trim().isEmpty()) {
             try {
-                com.google.gson.Gson gson = new com.google.gson.Gson();
                 @SuppressWarnings("unchecked")
                 java.util.Map<String, String> headers = gson.fromJson(headersJson, java.util.Map.class);
                 data.setHttpHeaders(headers);

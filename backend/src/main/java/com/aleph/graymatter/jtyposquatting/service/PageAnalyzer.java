@@ -318,15 +318,10 @@ public class PageAnalyzer {
 
                     // Wait for JavaFX pulse (first rendering)
                     CountDownLatch pulseLatch = new CountDownLatch(1);
-                    Platform.runLater(() -> {
-                        try {
-                            sleep(200);
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        pulseLatch.countDown();
-                    });
-                    pulseLatch.await(2, TimeUnit.SECONDS);
+                    javafx.animation.PauseTransition pulseDelay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(200));
+                    pulseDelay.setOnFinished(e -> pulseLatch.countDown());
+                    pulseDelay.play();
+                    pulseLatch.await(2, java.util.concurrent.TimeUnit.SECONDS);
 
                     logger.debug("Loading URL: {}", url);
 
@@ -335,158 +330,102 @@ public class PageAnalyzer {
 
                     webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
                         if (newState == Worker.State.SUCCEEDED) {
-                            logger.debug("Page loaded successfully, waiting for JS");
+                            logger.debug("Page loaded successfully, scheduling non-blocking snapshot");
 
-                            // Wait for JavaScript and dynamic content
-                            try {
-                                for (int i = 0; i < 8; i++) {
-                                    if (Thread.currentThread().isInterrupted()) {
-                                        logger.debug("Screenshot capture interrupted for {}", url);
+                            javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(1200));
+                            delay.setOnFinished(ev -> {
+                                try {
+                                    int contentWidth = 1280;
+                                    int contentHeight = 800;
+
+                                    try {
+                                        org.w3c.dom.Document doc = webView.getEngine().getDocument();
+                                        if (doc != null) {
+                                            org.w3c.dom.Element body = doc.getDocumentElement();
+                                            if (body != null) {
+                                                String width = body.getAttribute("scrollWidth");
+                                                String height = body.getAttribute("scrollHeight");
+                                                if (width != null && !width.isEmpty()) {
+                                                    contentWidth = Math.max(800, Math.min(Integer.parseInt(width), 1280));
+                                                }
+                                                if (height != null && !height.isEmpty()) {
+                                                    contentHeight = Math.max(600, Math.min(Integer.parseInt(height), 800));
+                                                }
+                                            }
+                                        }
+                                    } catch (Exception ignored) {}
+
+                                    webView.setPrefSize(contentWidth, contentHeight);
+                                    scene.getRoot().requestLayout();
+
+                                    logger.debug("Capturing snapshot: {}x{}", contentWidth, contentHeight);
+                                    javafx.scene.SnapshotParameters params = new javafx.scene.SnapshotParameters();
+                                    params.setFill(javafx.scene.paint.Color.WHITE);
+                                    WritableImage fxImage = new WritableImage(contentWidth, contentHeight);
+                                    webView.snapshot(params, fxImage);
+
+                                    // Check pixel data to detect empty/white screenshots
+                                    javafx.scene.image.PixelReader pixelReader = fxImage.getPixelReader();
+                                    boolean hasContent = false;
+                                    if (pixelReader != null) {
+                                        for (int y = 0; y < contentHeight && !hasContent; y += Math.max(1, contentHeight / 20)) {
+                                            for (int x = 0; x < contentWidth && !hasContent; x += Math.max(1, contentWidth / 20)) {
+                                                javafx.scene.paint.Color pixelColor = pixelReader.getColor(x, y);
+                                                if (pixelColor.getRed() < 0.99 || pixelColor.getGreen() < 0.99 || pixelColor.getBlue() < 0.99) {
+                                                    hasContent = true;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    if (!hasContent) {
+                                        byte[] placeholder = createPlaceholderScreenshot("Page rendered empty");
+                                        result.set(placeholder);
                                         latch.countDown();
-                                        Platform.runLater(stage::close);
+                                        stage.close();
                                         return;
                                     }
-                                    sleep(1000);
-                                }
-                            } catch (InterruptedException e) {
-                                logger.debug("Screenshot wait interrupted for {}", url);
-                                Thread.currentThread().interrupt();
-                                latch.countDown();
-                                Platform.runLater(stage::close);
-                                return;
-                            }
 
-                            // Check for interruption after waiting
-                            if (Thread.currentThread().isInterrupted()) {
-                                logger.debug("Screenshot capture interrupted after wait for {}", url);
-                                latch.countDown();
-                                Platform.runLater(stage::close);
-                                return;
-                            }
+                                    // Create thumbnail
+                                    BufferedImage thumbnail = new BufferedImage(320, 240, BufferedImage.TYPE_INT_RGB);
+                                    Graphics2D g2d = thumbnail.createGraphics();
+                                    g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                                    g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING, java.awt.RenderingHints.VALUE_RENDER_QUALITY);
+                                    g2d.setColor(java.awt.Color.WHITE);
+                                    g2d.fillRect(0, 0, 320, 240);
 
-                            int contentWidth = 1280;
-                            int contentHeight = 800;
-
-                            // Get actual content dimensions
-                            try {
-                                org.w3c.dom.Document doc = webView.getEngine().getDocument();
-                                if (doc != null) {
-                                    org.w3c.dom.Element body = doc.getDocumentElement();
-                                    if (body != null) {
-                                        String width = body.getAttribute("scrollWidth");
-                                        String height = body.getAttribute("scrollHeight");
-                                        if (width != null && !width.isEmpty()) {
-                                            contentWidth = Math.max(800, Math.min(Integer.parseInt(width), 1280));
-                                        }
-                                        if (height != null && !height.isEmpty()) {
-                                            contentHeight = Math.max(600, Math.min(Integer.parseInt(height), 800));
-                                        }
+                                    BufferedImage capturedImage = SwingFXUtils.fromFXImage(fxImage, null);
+                                    if (capturedImage != null) {
+                                        g2d.drawImage(capturedImage, 0, 0, 320, 240, null);
                                     }
+                                    g2d.dispose();
+
+                                    try {
+                                        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                                        ImageIO.write(thumbnail, "png", baos);
+                                        byte[] screenshotData = baos.toByteArray();
+                                        if (screenshotData.length > 0) {
+                                            result.set(screenshotData);
+                                        } else {
+                                            failureReason.set("Screenshot data is empty");
+                                        }
+                                    } catch (Exception e) {
+                                        failureReason.set("Error writing screenshot: " + e.getMessage());
+                                    }
+                                    latch.countDown();
+                                    stage.close();
+                                } catch (Exception ex) {
+                                    captureException.set(ex);
+                                    latch.countDown();
+                                    stage.close();
                                 }
-                            } catch (Exception e) {
-                                // Ignore dimension errors
-                            }
-
-                            // Resize WebView to fit content
-                            webView.setPrefSize(contentWidth, contentHeight);
-
-                            // Force layout update
-                            scene.getRoot().requestLayout();
-
-                            // Wait for another JavaFX pulse after resize
-                            CountDownLatch resizeLatch = new CountDownLatch(1);
-                            Platform.runLater(() -> {
-                                try {
-                                    sleep(500);
-                                } catch (InterruptedException e) {
-                                    Thread.currentThread().interrupt();
-                                }
-                                resizeLatch.countDown();
                             });
-                            try {
-                                resizeLatch.await(2, TimeUnit.SECONDS);
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                            }
-
-                            logger.debug("Capturing snapshot: {}x{}", contentWidth, contentHeight);
-
-                            // Capture snapshot
-                            javafx.scene.SnapshotParameters params = new javafx.scene.SnapshotParameters();
-                            params.setFill(javafx.scene.paint.Color.WHITE);
-                            WritableImage fxImage = new WritableImage(contentWidth, contentHeight);
-                            webView.snapshot(params, fxImage);
-
-                            logger.debug("Snapshot captured: {}x{}", contentWidth, contentHeight);
-
-                            // Check pixel data to detect empty/white screenshots
-                            javafx.scene.image.PixelReader pixelReader = fxImage.getPixelReader();
-                            boolean hasContent = false;
-                            if (pixelReader != null) {
-                                for (int y = 0; y < contentHeight && !hasContent; y += Math.max(1, contentHeight / 20)) {
-                                    for (int x = 0; x < contentWidth && !hasContent; x += Math.max(1, contentWidth / 20)) {
-                                        javafx.scene.paint.Color pixelColor = pixelReader.getColor(x, y);
-                                        // Check if pixel is not white (with some tolerance)
-                                        if (pixelColor.getRed() < 0.99 || pixelColor.getGreen() < 0.99 || pixelColor.getBlue() < 0.99) {
-                                            hasContent = true;
-                                        }
-                                    }
-                                }
-                                logger.debug("Screenshot has visual content: {}", hasContent);
-                            } else {
-                                logger.error("PixelReader is null");
-                            }
-
-                            if (!hasContent) {
-                                logger.debug("Detected empty/white screenshot for {} - returning placeholder", url);
-                                // Instead of returning null, create a placeholder with domain info
-                                byte[] placeholder = createPlaceholderScreenshot("Page rendered empty");
-                                result.set(placeholder);
-                                latch.countDown();
-                                Platform.runLater(stage::close);
-                                return;
-                            }
-
-                            // Create thumbnail
-                            BufferedImage thumbnail = new BufferedImage(
-                                320, 240, BufferedImage.TYPE_INT_RGB);
-                            Graphics2D g2d = thumbnail.createGraphics();
-                            g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,
-                                java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-                            g2d.setRenderingHint(java.awt.RenderingHints.KEY_RENDERING,
-                                java.awt.RenderingHints.VALUE_RENDER_QUALITY);
-                            g2d.setColor(java.awt.Color.WHITE);
-                            g2d.fillRect(0, 0, 320, 240);
-
-                            BufferedImage capturedImage = SwingFXUtils.fromFXImage(fxImage, null);
-                            if (capturedImage != null) {
-                                g2d.drawImage(capturedImage, 0, 0, 320, 240, null);
-                            } else {
-                                logger.error("SwingFXUtils.fromFXImage returned null");
-                            }
-
-                            g2d.dispose();
-
-                            try {
-                                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                                ImageIO.write(thumbnail, "png", baos);
-                                byte[] screenshotData = baos.toByteArray();
-                                if (screenshotData.length > 0) {
-                                    result.set(screenshotData);
-                                } else {
-                                    failureReason.set("Screenshot data is empty");
-                                }
-                            } catch (Exception e) {
-                                logger.error("Error writing screenshot: {}", e.getMessage());
-                                failureReason.set("Error writing screenshot: " + e.getMessage());
-                            }
-                            latch.countDown();
-                            Platform.runLater(stage::close);
+                            delay.play();
                         } else if (newState == Worker.State.FAILED) {
                             logger.error("Page load failed for screenshot: {}", url);
                             failureReason.set("Page load failed");
                             latch.countDown();
-                            Platform.runLater(stage::close);
+                            stage.close();
                         }
                     });
                 } catch (Exception e) {

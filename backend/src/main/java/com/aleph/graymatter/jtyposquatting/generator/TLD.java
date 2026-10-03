@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class TLD {
@@ -70,7 +71,12 @@ public class TLD {
         String originalTLD = domainName.getTLD().toLowerCase();
         Set<String> uniqueDomains = new HashSet<>();
 
-        for (String tld : TLD_LIST) {
+        List<String> tldsSnapshot;
+        synchronized (TLD_LIST) {
+            tldsSnapshot = new ArrayList<>(TLD_LIST);
+        }
+
+        for (String tld : tldsSnapshot) {
             if (!tld.equals(originalTLD)) {
                 String newDomain = domainWithoutTLD + '.' + tld;
                 if (uniqueDomains.add(newDomain)) {
@@ -85,7 +91,9 @@ public class TLD {
     }
 
     public static void UpdateTLDList() throws IOException {
-        TLD_LIST.clear();
-        loadTLDList();
+        synchronized (TLD_LIST) {
+            TLD_LIST.clear();
+            loadTLDList();
+        }
     }
 }

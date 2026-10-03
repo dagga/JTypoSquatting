@@ -2,14 +2,22 @@ package com.aleph.graymatter.jtyposquatting.service;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for PageAnalyzer service.
  * Tests basic functionality without Spring Boot context.
+ *
+ * <p>Ces tests effectuent de vraies connexions réseau (www.aleph-networks.eu).
+ * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
+ * {@code ./gradlew test -Dexclude.network=true}
  */
+@Tag("network")
+@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
 class PageAnalyzerUnitTest {
 
     private final PageAnalyzer pageAnalyzer = new PageAnalyzer();

@@ -27,13 +27,6 @@ public class JTypoSquatting {
             throw e;
         }
 
-        // Update TLD list from external sources
-        try {
-            UpdateTLDList();
-        } catch (IOException ioe) {
-            log.error("e: ", ioe);
-        }
-
         ArrayList<DomainName> domainsArrayResults = new ArrayList<>();
 
         // Generate typo variations

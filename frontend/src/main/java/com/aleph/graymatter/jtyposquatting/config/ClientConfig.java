@@ -19,13 +19,17 @@ public class ClientConfig {
     private static void loadConfig() {
         Properties props = new Properties();
         try {
-            // Try to load from classpath
-            props.load(ClientConfig.class.getClassLoader().getResourceAsStream(CONFIG_FILE));
-            apiUrl = props.getProperty("api.url", DEFAULT_API_URL);
-        } catch (IOException e) {
-            // File not found, use default value
-            apiUrl = DEFAULT_API_URL;
+            java.io.InputStream is = ClientConfig.class.getClassLoader().getResourceAsStream(CONFIG_FILE);
+            if (is != null) {
+                try (is) {
+                    props.load(is);
+                    apiUrl = props.getProperty("api.url", DEFAULT_API_URL);
+                    return;
+                }
+            }
+        } catch (Exception ignored) {
         }
+        apiUrl = DEFAULT_API_URL;
     }
     
     public static String getApiUrl() {

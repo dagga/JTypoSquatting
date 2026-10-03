@@ -25,8 +25,8 @@ public class DomainStreamingService {
     private final ExecutorService executorService;
     private final ScheduledExecutorService timeoutExecutor;
     private AutoCloseable activeStreamHandle;
-    private final Map<String, Integer> domainRowMap = new HashMap<>();
-    private final Map<String, Long> testingDomainTimestamps = new HashMap<>();
+    private final Map<String, Integer> domainRowMap = new ConcurrentHashMap<>();
+    private final Map<String, Long> testingDomainTimestamps = new ConcurrentHashMap<>();
     private static final int DOMAIN_TIMEOUT_MS = 5000; // 5 seconds for testing
 
     // Statistics
@@ -35,7 +35,7 @@ public class DomainStreamingService {
     private final AtomicInteger totalCount = new AtomicInteger(0);
 
     // Track processing state: true = actively being processed (orange), false = waiting (white)
-    private final Map<String, Boolean> processingState = new HashMap<>();
+    private final Map<String, Boolean> processingState = new ConcurrentHashMap<>();
 
     // Callbacks
     private Consumer<DomainResultDTO> onDomainUpdate;
@@ -109,8 +109,12 @@ public class DomainStreamingService {
                             } else {
                                 testingDomainTimestamps.remove(result.getDomain());
                                 processingState.remove(result.getDomain());
-                                if ("Active".equals(result.getStatus())) activeCount.incrementAndGet();
-                                else if ("Dead".equals(result.getStatus())) deadCount.incrementAndGet();
+                                String s = result.getStatus();
+                                if ("Active".equals(s) || "Suspicious".equals(s) || "Safe".equals(s)) {
+                                    activeCount.incrementAndGet();
+                                } else if ("Dead".equals(s) || "Unreachable".equals(s)) {
+                                    deadCount.incrementAndGet();
+                                }
                             }
 
                             onDomainUpdate.accept(result);

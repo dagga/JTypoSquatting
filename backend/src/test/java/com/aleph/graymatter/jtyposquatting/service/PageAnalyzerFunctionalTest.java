@@ -3,19 +3,27 @@ package com.aleph.graymatter.jtyposquatting.service;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Functional tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
- * 
+ *
+ * <p>Ces tests effectuent de vraies connexions réseau et/ou requièrent un display X11.
+ * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
+ * {@code ./gradlew test -Dexclude.network=true}
+ *
  * These tests verify:
  * 1. Data collection from real domains
  * 2. Screenshot capture functionality
  * 3. Backend data persistence
  */
+@Tag("network")
+@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
 class PageAnalyzerFunctionalTest {
 
     private PageAnalyzer pageAnalyzer;

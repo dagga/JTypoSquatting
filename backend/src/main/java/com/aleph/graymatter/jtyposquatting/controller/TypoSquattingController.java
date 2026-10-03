@@ -38,8 +38,6 @@ public class TypoSquattingController {
     private final DatabaseService databaseService;
     private final ConcurrentHashMap<String, ExecutorService> activeSessions = new ConcurrentHashMap<>();
 
-    private final ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
     public TypoSquattingController(DomainCheckService domainCheckService, DatabaseService databaseService) {
         this.domainCheckService = domainCheckService;
         this.databaseService = databaseService;
@@ -187,15 +185,19 @@ public class TypoSquattingController {
             byte[] screenshot = dto.getScreenshot();
             logger.debug("Sending SSE event for {} with screenshot: {} bytes", dto.getDomain(), screenshot != null ? screenshot.length : 0);
         }
-        emitter.send(SseEmitter.event()
-                .name("domainUpdate")
-                .data(data, MediaType.APPLICATION_JSON)
-                .id(String.valueOf(System.currentTimeMillis())));
+        synchronized (emitter) {
+            emitter.send(SseEmitter.event()
+                    .name("domainUpdate")
+                    .data(data, MediaType.APPLICATION_JSON)
+                    .id(String.valueOf(System.currentTimeMillis())));
+        }
     }
 
     private void sendErrorEvent(SseEmitter emitter, String message) {
         try {
-            emitter.send(SseEmitter.event().name("error").data(Collections.singletonMap("error", message)));
+            synchronized (emitter) {
+                emitter.send(SseEmitter.event().name("error").data(Collections.singletonMap("error", message)));
+            }
         } catch (IOException e) {
             // no-op
         }

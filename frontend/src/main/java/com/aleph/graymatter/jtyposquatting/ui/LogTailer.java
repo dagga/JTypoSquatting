@@ -17,6 +17,7 @@ public class LogTailer {
     private final JTextArea textArea;
     private final JCheckBox followCheck;
     private long lastPos = 0;
+    private ScheduledExecutorService logExecutor;
     private ScheduledFuture<?> future;
     private final Deque<String> buffer = new ArrayDeque<>();
     private final int maxLines = 1000; // Reduced from 5000 to 1000
@@ -54,68 +55,69 @@ public class LogTailer {
             // ignore initial read
         }
 
-        try (ScheduledExecutorService logExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "LogTailer");
-            t.setDaemon(true);
-            return t;
-        })) {
+        if (logExecutor == null || logExecutor.isShutdown()) {
+            logExecutor = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "LogTailer-" + path.getFileName());
+                t.setDaemon(true);
+                return t;
+            });
+        }
 
-            // Increased interval from 500ms to 1000ms to reduce CPU usage
-            future = logExecutor.scheduleWithFixedDelay(() -> {
-                try {
-                    if (!java.nio.file.Files.exists(path)) return;
-                    long len = java.nio.file.Files.size(path);
-                    if (len < lastPos) {
-                        // rotated
-                        lastPos = 0;
-                    }
-                    if (len > lastPos) {
-                        try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(path.toFile(), "r")) {
-                            raf.seek(lastPos);
-                            String line;
-                            java.util.List<String> newLines = new java.util.ArrayList<>();
-                            int lineCount = 0;
-                            while ((line = raf.readLine()) != null && lineCount < 100) { // Limit to 100 lines per read
-                                lineCount++;
-                                newLines.add(new String(line.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), java.nio.charset.StandardCharsets.UTF_8));
+        // Interval 1000ms to reduce CPU usage
+        future = logExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                if (!java.nio.file.Files.exists(path)) return;
+                long len = java.nio.file.Files.size(path);
+                if (len < lastPos) {
+                    // rotated
+                    lastPos = 0;
+                }
+                if (len > lastPos) {
+                    try (java.io.RandomAccessFile raf = new java.io.RandomAccessFile(path.toFile(), "r")) {
+                        raf.seek(lastPos);
+                        String line;
+                        java.util.List<String> newLines = new java.util.ArrayList<>();
+                        int lineCount = 0;
+                        while ((line = raf.readLine()) != null && lineCount < 100) { // Limit to 100 lines per read
+                            lineCount++;
+                            newLines.add(new String(line.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1), java.nio.charset.StandardCharsets.UTF_8));
+                        }
+                        lastPos = raf.getFilePointer();
+                        if (!newLines.isEmpty()) {
+                            boolean trimmed = false;
+                            synchronized (lock) {
+                                for (String l : newLines) buffer.addLast(l);
+                                while (buffer.size() > maxLines) {
+                                    buffer.removeFirst();
+                                    trimmed = true;
+                                }
                             }
-                            lastPos = raf.getFilePointer();
-                            if (!newLines.isEmpty()) {
-                                boolean trimmed = false;
+                            if (trimmed) {
+                                // Build full text in background
+                                String full;
                                 synchronized (lock) {
-                                    for (String l : newLines) buffer.addLast(l);
-                                    while (buffer.size() > maxLines) {
-                                        buffer.removeFirst();
-                                        trimmed = true;
-                                    }
+                                    full = String.join("\n", buffer);
                                 }
-                                if (trimmed) {
-                                    // Build full text in background
-                                    String full;
-                                    synchronized (lock) {
-                                        full = String.join("\n", buffer);
-                                    }
-                                    final String out = full;
-                                    SwingUtilities.invokeLater(() -> {
-                                        textArea.setText(out);
-                                        if (followCheck.isSelected())
-                                            textArea.setCaretPosition(textArea.getDocument().getLength());
-                                    });
-                                } else {
-                                    final String out = String.join("\n", newLines) + "\n";
-                                    SwingUtilities.invokeLater(() -> {
-                                        textArea.append(out);
-                                        if (followCheck.isSelected())
-                                            textArea.setCaretPosition(textArea.getDocument().getLength());
-                                    });
-                                }
+                                final String out = full;
+                                SwingUtilities.invokeLater(() -> {
+                                    textArea.setText(out);
+                                    if (followCheck.isSelected())
+                                        textArea.setCaretPosition(textArea.getDocument().getLength());
+                                });
+                            } else {
+                                final String out = String.join("\n", newLines) + "\n";
+                                SwingUtilities.invokeLater(() -> {
+                                    textArea.append(out);
+                                    if (followCheck.isSelected())
+                                        textArea.setCaretPosition(textArea.getDocument().getLength());
+                                });
                             }
                         }
                     }
-                } catch (Exception ignored) {
                 }
-            }, 1000, 1000, TimeUnit.MILLISECONDS);
-        }
+            } catch (Exception ignored) {
+            }
+        }, 1000, 1000, TimeUnit.MILLISECONDS);
     }
 
     public void stop() {
@@ -123,6 +125,10 @@ public class LogTailer {
         if (future != null) {
             future.cancel(true);
             future = null;
+        }
+        if (logExecutor != null && !logExecutor.isShutdown()) {
+            logExecutor.shutdownNow();
+            logExecutor = null;
         }
     }
 

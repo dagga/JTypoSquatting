@@ -38,6 +38,9 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        // Propager le flag réseau/X11 aux tests :
+        // ./gradlew test -Dexclude.network=true  →  exclut @DisabledIfSystemProperty(named="exclude.network")
+        systemProperty 'exclude.network', System.getProperty('exclude.network', 'false')
     }
 }
 
@@ -53,6 +56,10 @@ project(':shared') {
 
         // JSoup for HTML parsing
         implementation 'org.jsoup:jsoup:1.17.2'
+
+        // Testing
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 }
 
@@ -75,6 +82,7 @@ project(':backend') {
 
         // H2 embedded database (moved from shared)
         implementation 'com.h2database:h2:2.2.224'
+        implementation 'org.springframework.boot:spring-boot-starter-jdbc:3.5.0'
 
         // Business logic dependencies
         implementation 'com.google.guava:guava:33.1.0-jre'
@@ -155,6 +163,10 @@ project(':frontend') {
         // SLF4J logging
         implementation 'org.slf4j:slf4j-api:2.0.16'
         runtimeOnly 'ch.qos.logback:logback-classic:1.5.18'
+
+        // Testing
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
         // No JavaFX dependencies: using Swing for UI.
     }

@@ -15,10 +15,12 @@ public class Dash {
         String tld = domainName.getTLD();
         Set<String> uniqueDomains = new HashSet<>();
 
+        String prefix = (subDomain != null && !subDomain.isEmpty()) ? subDomain + "." : "";
+
         for (int i = 1; i < domainWithoutSubDomainMinusTLD.length(); i++) {
             StringBuilder sb = new StringBuilder(domainWithoutSubDomainMinusTLD);
             sb.insert(i, '-');
-            String newDomain = subDomain + '.' + sb + '.' + tld;
+            String newDomain = prefix + sb + '.' + tld;
             if (uniqueDomains.add(newDomain)) {
                 try {
                     resultList.add(new DomainName(newDomain));
@@ -38,13 +40,14 @@ public class Dash {
         String subDomain = domainName.getSubDomain();
         String tld = domainName.getTLD();
         Set<String> uniqueDomains = new HashSet<>();
+        String prefix = (subDomain != null && !subDomain.isEmpty()) ? subDomain + "." : "";
 
         // Remove all dashes at once
         StringBuilder sb = new StringBuilder(domainWithoutSubDomainMinusTLD);
         while (sb.indexOf("-") != -1) {
             sb.delete(sb.indexOf("-"), sb.indexOf("-") + 1);
         }
-        String newDomain = subDomain + '.' + sb + '.' + tld;
+        String newDomain = prefix + sb + '.' + tld;
         if (uniqueDomains.add(newDomain)) {
             try {
                 resultList.add(new DomainName(newDomain));

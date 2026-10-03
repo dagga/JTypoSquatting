@@ -9,14 +9,13 @@ import java.util.ResourceBundle;
 public class ConfigManager {
     private static final ConfigManager instance = new ConfigManager();
     
-    private final ResourceBundle messages;
+    private ResourceBundle messages;
     private final ResourceBundle config;
+    private Locale currentLocale;
     
     private ConfigManager() {
-        // Load messages bundle (supports i18n)
-        this.messages = ResourceBundle.getBundle("messages", Locale.getDefault());
-        
-        // Load config bundle
+        this.currentLocale = Locale.getDefault();
+        this.messages = ResourceBundle.getBundle("messages", currentLocale);
         this.config = ResourceBundle.getBundle("config");
     }
     
@@ -93,14 +92,16 @@ public class ConfigManager {
     /**
      * Set locale for internationalization
      */
-    public void setLocale(Locale locale) {
+    public synchronized void setLocale(Locale locale) {
+        this.currentLocale = locale;
         ResourceBundle.clearCache();
+        this.messages = ResourceBundle.getBundle("messages", locale);
     }
     
     /**
      * Get current locale
      */
-    public Locale getLocale() {
-        return Locale.getDefault();
+    public synchronized Locale getLocale() {
+        return currentLocale != null ? currentLocale : Locale.getDefault();
     }
 }

@@ -4,15 +4,30 @@ Typo squatting domain detection tool for security analysts and brand protection 
 
 ![TypoSquatting Example](https://github.com/hernic/JTypoSquatting/assets/4397039/874a5ff7-68d5-4d8b-9a60-a4dddde188f9)
 
-## Quick Start
+## ⚠️ Architecture : DEUX processus distincts
+
+JTypoSquatting est composé de **deux processus indépendants** qui doivent être démarrés séparément :
+
+| Processus | Rôle | Démarrage |
+|-----------|------|-----------|
+| **Backend** (Spring Boot :8080) | Génère les variantes, analyse les domaines, capture les screenshots | **Terminal 1** |
+| **Frontend** (Swing GUI) | Interface graphique, affichage en temps réel via SSE | **Terminal 2** |
+
+## Démarrage rapide
 
 ```bash
-# Build and run
-./gradlew :frontend:copyFatJar
+# Terminal 1 — Backend (à démarrer EN PREMIER)
+./gradlew :backend:bootRun
+# Attendre : "Started on port 8080"
+
+# Terminal 2 — Frontend (une fois le backend prêt)
 java -jar JTypoSquatting.jar
 ```
 
-**Requirements:** Java 21+ | [Full Installation Guide](doc/DEPLOYMENT.md)
+**Ou avec le script tout-en-un :** `./scripts/run.sh`
+
+**Prérequis :** Java 21+ | [Guide de démarrage complet](doc/QUICK_START.md)
+
 
 ---
 
