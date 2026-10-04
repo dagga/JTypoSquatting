@@ -4,64 +4,20 @@
 **Temps avant premier lancement :** ~5 minutes
 
 > [!IMPORTANT]
-> **JTypoSquatting est une application à DEUX processus distincts.**
-> Le backend (serveur API Spring Boot) et le frontend (interface Swing) doivent être démarrés séparément,
-> dans deux terminaux différents, dans l'ordre indiqué ci-dessous.
+> **JTypoSquatting est désormais une application tout-en-un.**
+> Le backend et le frontend sont embarqués dans le même JAR et démarrent simultanément.
 
 ---
 
-## Prérequis
+## Démarrage rapide
 
-- **Java 21 ou supérieur** installé
-  - Vérifier : `java -version`
-  - Télécharger : https://www.oracle.com/java/technologies/downloads/
-
----
-
-## Démarrage en 2 étapes (obligatoires)
-
-### Étape 1 — Démarrer le Backend (Terminal 1)
-
-Le backend est le serveur API REST/SSE qui effectue les analyses de domaines.
-Il doit être démarré **en premier** et doit rester actif pendant toute la session.
-
-```bash
-# Depuis la racine du projet
-./gradlew :backend:bootRun
-```
-
-Attendez le message confirmant le démarrage :
-```
-Started JTypoSquatting in X.XXX seconds (process running as PID XXXXX)
-Tomcat started on port 8080
-```
-
-> **Alternative (script tout-en-un) :**
-> ```bash
-> ./scripts/run.sh
-> ```
-
----
-
-### Étape 2 — Lancer le Frontend (Terminal 2)
-
-Ouvrez un **second terminal** et lancez l'interface graphique :
+Lancez simplement l'application :
 
 ```bash
 java -jar JTypoSquatting.jar
 ```
 
-> **Depuis les sources :**
-> ```bash
-> ./gradlew :frontend:run
-> ```
-
-L'interface Swing s'ouvre. Si le backend est bien démarré, la barre d'état affiche :
-```
-✅ Connecté à http://localhost:8080
-```
-
-Si vous voyez un message d'erreur, vérifiez que l'Étape 1 est bien effectuée.
+Si le backend a besoin de ports spécifiques ou de configuration, ils sont gérés automatiquement ou via le fichier `application.properties`.
 
 ---
 
@@ -75,10 +31,7 @@ cd JTypoSquatting
 # 2. Compiler et packager
 ./gradlew clean build :frontend:copyFatJar
 
-# 3. Terminal 1 — Backend
-./gradlew :backend:bootRun
-
-# 4. Terminal 2 — Frontend
+# 3. Lancer
 java -jar JTypoSquatting.jar
 ```
 
@@ -97,17 +50,6 @@ java -jar JTypoSquatting.jar
 ---
 
 ## Résolution des problèmes courants
-
-### "Impossible de se connecter au serveur backend"
-
-Le backend n'est pas démarré ou pas encore prêt.
-
-```bash
-# Terminal 1 : démarrer le backend
-./gradlew :backend:bootRun
-# Attendre le message "Started on port 8080"
-# Puis relancer le frontend dans Terminal 2
-```
 
 ### "Java not found" / "Commande introuvable"
 
@@ -131,10 +73,7 @@ java -version
 ## Référence rapide
 
 ```bash
-# Démarrer le backend
-./gradlew :backend:bootRun
-
-# Lancer le frontend
+# Lancer l'application
 java -jar JTypoSquatting.jar
 
 # Build complet

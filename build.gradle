@@ -132,6 +132,13 @@ project(':frontend') {
 
     dependencies {
         implementation project(':shared')
+        implementation project(':backend')
+
+        // Spring Boot dependencies (needed for backend embedded in fatJar)
+        implementation 'org.springframework.boot:spring-boot-starter-web:3.5.0'
+        implementation 'org.springframework.boot:spring-boot-starter-jetty:3.5.0'
+        implementation 'org.springframework.boot:spring-boot-starter-jdbc:3.5.0'
+        implementation 'com.h2database:h2:2.2.224'
 
         // HTTP Client for REST calls
         implementation 'com.google.guava:guava:33.1.0-jre'
@@ -167,7 +174,7 @@ project(':frontend') {
         archiveFileName = 'JTypoSquatting.jar'
         duplicatesStrategy = 'exclude'
         manifest {
-            attributes 'Main-Class': 'com.aleph.graymatter.jtyposquatting.ui.JTypoFrame'
+            attributes 'Main-Class': 'com.aleph.graymatter.jtyposquatting.CombinedLauncher'
         }
         from {
             configurations.runtimeClasspath.collect { 

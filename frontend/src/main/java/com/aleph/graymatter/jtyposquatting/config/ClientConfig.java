@@ -8,7 +8,7 @@ import java.util.Properties;
  */
 public class ClientConfig {
     private static final String CONFIG_FILE = "client.properties";
-    private static final String DEFAULT_API_URL = "http://localhost:8080";
+    private static final String DEFAULT_API_URL = "http://localhost:8081";
     
     private static String apiUrl;
     

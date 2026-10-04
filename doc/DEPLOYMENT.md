@@ -197,19 +197,9 @@ The fat JAR is optimized to exclude unnecessary dependencies:
 scripts\run.bat
 ```
 
-### 4.2 Manual Startup
+### 4.2 Lancement
 
-**Terminal 1 - Start Backend:**
-
-```bash
-./gradlew :backend:bootRun
-```
-
-**Terminal 2 - Start Frontend:**
-
-```bash
-./gradlew :frontend:run
-```
+L'application est désormais "tout-en-un". Vous n'avez plus besoin de démarrer le backend et le frontend séparément. Il vous suffit de lancer le fichier JAR (voir section 4.3).
 
 ### 4.3 Running the JAR
 

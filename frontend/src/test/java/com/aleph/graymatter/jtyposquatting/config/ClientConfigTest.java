@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ClientConfigTest {
 
     @Test
-    @DisplayName("L'URL API par défaut est 'http://localhost:8080'")
+    @DisplayName("L'URL API par défaut est 'http://localhost:8081'")
     void testDefaultApiUrl() {
         // Si client.properties est absent (classpath de test), on doit avoir la valeur par défaut
         String url = ClientConfig.getApiUrl();
@@ -48,7 +48,7 @@ class ClientConfigTest {
     @DisplayName("L'URL par défaut est celle attendue si client.properties est absent")
     void testDefaultUrlValue() {
         // On force le rechargement en testant la valeur actuelle
-        // Si le classpath de test ne contient pas client.properties, doit être localhost:8080
+        // Si le classpath de test ne contient pas client.properties, doit être localhost:8081
         String url = ClientConfig.getApiUrl();
         // L'URL doit être une URL HTTP valide
         assertTrue(url == null || url.startsWith("http"),
