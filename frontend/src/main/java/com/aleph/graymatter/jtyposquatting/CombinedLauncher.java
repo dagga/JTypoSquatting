@@ -2,13 +2,16 @@ package com.aleph.graymatter.jtyposquatting;
 
 import com.aleph.graymatter.jtyposquatting.ui.JTypoFrame;
 import java.net.Socket;
+import org.springframework.boot.builder.SpringApplicationBuilder;
+import com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication;
 
 public class CombinedLauncher {
     public static void main(String[] args) {
         // Start Backend in a separate thread
         new Thread(() -> {
-            System.setProperty("server.port", "8081");
-            com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication.main(args);
+            new SpringApplicationBuilder(JTypoSquattingApplication.class)
+                    .properties("server.port=8081")
+                    .run(args);
         }).start();
         
         // Wait for Backend to start on 8081
