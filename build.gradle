@@ -87,6 +87,10 @@ project(':backend') {
             exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
         }
 
+        // Monitoring: health, Prometheus metrics
+        implementation 'org.springframework.boot:spring-boot-starter-actuator:3.5.0'
+        runtimeOnly 'io.micrometer:micrometer-registry-prometheus:1.15.0'
+
         // Rate limiting
         implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
 

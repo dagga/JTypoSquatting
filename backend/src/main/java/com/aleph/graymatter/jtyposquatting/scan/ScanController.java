@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.scan;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.dto.GenerationRequestDTO;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,6 +30,8 @@ import java.util.Map;
  * read page by page.
  */
 @RestController
+// Disabled on worker instances, whose HTTP server only exposes monitoring endpoints
+@ConditionalOnProperty(name = "jtypo.api.enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api/scans")
 public class ScanController {
 

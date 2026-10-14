@@ -10,6 +10,7 @@ import com.microsoft.playwright.PlaywrightException;
 import com.microsoft.playwright.options.ScreenshotType;
 import com.microsoft.playwright.options.ServiceWorkerPolicy;
 import com.microsoft.playwright.options.WaitUntilState;
+import io.micrometer.core.instrument.Metrics;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +69,11 @@ public class PlaywrightScreenshotService implements ScreenshotService {
 
     @Override
     public byte[] captureScreenshot(URL url) {
-        if (!enabled || unavailable || url == null || !isRequestAllowed(url.toString())) {
+        if (!enabled || unavailable || url == null) {
+            return null;
+        }
+        if (!isRequestAllowed(url.toString())) {
+            Metrics.counter("jtypo.screenshots", "outcome", "blocked").increment();
             return null;
         }
         try {
@@ -83,8 +88,11 @@ public class PlaywrightScreenshotService implements ScreenshotService {
         BrowserSlot slot = null;
         try {
             slot = borrowSlot();
-            return capture(slot.browser(), url.toString());
+            byte[] png = capture(slot.browser(), url.toString());
+            Metrics.counter("jtypo.screenshots", "outcome", "success").increment();
+            return png;
         } catch (PlaywrightException e) {
+            Metrics.counter("jtypo.screenshots", "outcome", "failure").increment();
             logger.debug("Screenshot failed for {}: {}", url, e.getMessage());
             if (slot != null && !slot.browser().isConnected()) {
                 discard(slot);

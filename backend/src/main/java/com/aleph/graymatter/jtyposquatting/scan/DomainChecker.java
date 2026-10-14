@@ -6,6 +6,7 @@ import com.aleph.graymatter.jtyposquatting.dto.TlsStatus;
 import com.aleph.graymatter.jtyposquatting.persistence.DomainKeys;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
 import com.aleph.graymatter.jtyposquatting.storage.ScreenshotStore;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -26,12 +27,15 @@ public class DomainChecker {
     private final ScreenshotStore screenshots;
     private final Duration ttl;
     private final Clock clock = Clock.systemUTC();
+    private final MeterRegistry meters;
 
     public DomainChecker(DomainCheckService domainCheckService, DomainCheckRepository cache, ScreenshotStore screenshots,
+                         MeterRegistry meters,
                          @Value("${jtypo.cache.ttl-hours:24}") long ttlHours) {
         this.domainCheckService = domainCheckService;
         this.cache = cache;
         this.screenshots = screenshots;
+        this.meters = meters;
         this.ttl = Duration.ofHours(ttlHours);
     }
 
@@ -43,10 +47,12 @@ public class DomainChecker {
         if (!forceRefresh) {
             Optional<DomainCheck> cached = cache.find(domain);
             if (cached.isPresent() && cached.get().checkedAt().isAfter(clock.instant().minus(ttl))) {
+                meters.counter("jtypo.checks", "source", "cache").increment();
                 return cached.get();
             }
         }
-        DomainResultDTO result = domainCheckService.analyze(domain);
+        meters.counter("jtypo.checks", "source", "network").increment();
+        DomainResultDTO result = meters.timer("jtypo.check.duration").record(() -> domainCheckService.analyze(domain));
         byte[] png = result.getScreenshot();
         String screenshotKey = png != null && png.length > 0 ? screenshots.put(png) : null;
         DomainCheck check = toCheck(domain, result, screenshotKey, clock.instant());

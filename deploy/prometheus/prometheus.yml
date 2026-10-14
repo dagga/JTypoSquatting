@@ -1,0 +1,22 @@
+# Example scrape configuration. Prometheus must be on the "data" network of deploy/docker-compose.prod.yml
+# to reach the monitoring port (8082) of the API instances and the workers.
+global:
+  scrape_interval: 30s
+
+rule_files:
+  - alerts.yml
+
+scrape_configs:
+  - job_name: jtyposquatting-api
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [api]
+        type: A
+        port: 8082
+
+  - job_name: jtyposquatting-worker
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [worker]
+        type: A
+        port: 8082

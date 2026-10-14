@@ -19,10 +19,12 @@ RUN useradd --system --uid 10001 jtypo
 COPY --from=build /src/backend/build/libs/jtyposquatting-backend.jar /app/app.jar
 USER 10001
 ENV SPRING_PROFILES_ACTIVE=api \
+    LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs \
     STORAGE_TYPE=s3 \
     FORWARD_HEADERS_STRATEGY=framework \
     SESSION_COOKIE_SECURE=true
-EXPOSE 8081
+# 8081: API, 8082: monitoring (health, Prometheus), never routed by the reverse proxy
+EXPOSE 8081 8082
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
 
 # Workers: process scans and open hostile pages with Chromium. The Playwright image provides
@@ -32,6 +34,9 @@ COPY --from=build /src/backend/build/libs/jtyposquatting-backend.jar /app/app.ja
 # Unprivileged user of the image
 USER pwuser
 ENV SPRING_PROFILES_ACTIVE=worker \
+    LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs \
     STORAGE_TYPE=s3 \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Monitoring only (health, Prometheus)
+EXPOSE 8082
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
