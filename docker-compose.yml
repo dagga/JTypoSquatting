@@ -1,0 +1,14 @@
+# Development services for JTypoSquatting.
+#   docker compose up -d keycloak     # OpenID Connect provider on http://localhost:8180 (admin/admin, user alice/alice)
+# Never use these credentials outside a developer machine.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8180:8180"
+    volumes:
+      - ./deploy/keycloak/jtypo-realm.json:/opt/keycloak/data/import/jtypo-realm.json:ro

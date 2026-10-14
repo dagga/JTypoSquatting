@@ -14,7 +14,8 @@ public class CombinedLauncher {
         // Start Backend in a separate thread
         new Thread(() -> {
             new SpringApplicationBuilder(JTypoSquattingApplication.class)
-                    .properties("server.port=8081")
+                    // Desktop mode: API reachable from this machine only, no login
+                    .properties("server.port=8081", "server.address=127.0.0.1", "jtypo.security.mode=local")
                     .run(args);
         }).start();
         
