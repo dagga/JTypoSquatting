@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.config;
 
 import com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication;
 import com.aleph.graymatter.jtyposquatting.controller.UserController;
+import com.aleph.graymatter.jtyposquatting.retention.RetentionService;
 import com.aleph.graymatter.jtyposquatting.scan.ScanController;
 import com.aleph.graymatter.jtyposquatting.scan.ScanWorker;
 import com.aleph.graymatter.jtyposquatting.storage.ScreenshotController;
@@ -30,6 +31,7 @@ class DeploymentProfilesTest {
     void testWorkerProfile() {
         try (ConfigurableApplicationContext context = start("worker")) {
             assertEquals(1, context.getBeansOfType(ScanWorker.class).size());
+            assertEquals(1, context.getBeansOfType(RetentionService.class).size(), "purge planifiée sur les workers");
             assertTrue(context.getBeansOfType(ScanController.class).isEmpty());
             assertTrue(context.getBeansOfType(UserController.class).isEmpty());
             assertTrue(context.getBeansOfType(ScreenshotController.class).isEmpty());
@@ -41,6 +43,7 @@ class DeploymentProfilesTest {
     void testApiProfile() {
         try (ConfigurableApplicationContext context = start("api")) {
             assertTrue(context.getBeansOfType(ScanWorker.class).isEmpty());
+            assertTrue(context.getBeansOfType(RetentionService.class).isEmpty());
             assertFalse(context.getBeansOfType(SecurityFilterChain.class).isEmpty());
             assertEquals(1, context.getBeansOfType(ScanController.class).size());
         }
