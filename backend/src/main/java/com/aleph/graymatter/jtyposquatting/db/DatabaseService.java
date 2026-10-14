@@ -21,10 +21,12 @@ public class DatabaseService {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
+    /**
+     * Legacy storage of the desktop application. The table is created by Flyway
+     * (V3__legacy_domain_page_data) and emptied at startup, as before.
+     */
     @PostConstruct
     public void init() {
-        initializeTable();
-        // Clear database at startup to ensure clean state
         deleteAll();
     }
 
@@ -33,36 +35,9 @@ public class DatabaseService {
         // No persistent connection held
     }
 
-    private void initializeTable() {
-        String sql = """
-            CREATE TABLE IF NOT EXISTS domain_page_data (
-                domain VARCHAR(255) PRIMARY KEY,
-                html_content TEXT,
-                text_content TEXT,
-                meta_description TEXT,
-                meta_keywords VARCHAR(1000),
-                meta_author VARCHAR(500),
-                meta_og_title VARCHAR(500),
-                meta_og_description VARCHAR(1000),
-                detected_language VARCHAR(10),
-                timestamp BIGINT,
-                http_code INTEGER,
-                http_headers TEXT,
-                screenshot BLOB
-            )
-            """;
-        jdbcTemplate.execute(sql);
-    }
-
     public void save(DomainPageDTO data) {
-        String sql = """
-            MERGE INTO domain_page_data (domain, html_content, text_content, meta_description,
-                meta_keywords, meta_author, meta_og_title, meta_og_description,
-                detected_language, timestamp, http_code, http_headers, screenshot)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """;
-        jdbcTemplate.update(sql,
-            data.getDomain(),
+        // Portable upsert (H2 and MySQL)
+        Object[] values = {
             data.getHtmlContent(),
             data.getTextContent(),
             data.getMetaDescription(),
@@ -74,8 +49,23 @@ public class DatabaseService {
             data.getTimestamp(),
             data.getHttpCode(),
             data.getHttpHeaders() != null ? gson.toJson(data.getHttpHeaders()) : null,
-            data.getScreenshot()
-        );
+            data.getScreenshot(),
+            data.getDomain()
+        };
+        int updated = jdbcTemplate.update("""
+            UPDATE domain_page_data SET html_content = ?, text_content = ?, meta_description = ?,
+                meta_keywords = ?, meta_author = ?, meta_og_title = ?, meta_og_description = ?,
+                detected_language = ?, timestamp = ?, http_code = ?, http_headers = ?, screenshot = ?
+            WHERE domain = ?
+            """, values);
+        if (updated == 0) {
+            jdbcTemplate.update("""
+                INSERT INTO domain_page_data (html_content, text_content, meta_description,
+                    meta_keywords, meta_author, meta_og_title, meta_og_description,
+                    detected_language, timestamp, http_code, http_headers, screenshot, domain)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, values);
+        }
     }
 
     public Optional<DomainPageDTO> findByDomain(String domain) {
