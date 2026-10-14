@@ -45,3 +45,6 @@ bin/
 /shared/build/libs/shared-2.0-alpha1.jar
 /backend/typosquatting_db.mv.db
 /PortKiller.class
+
+# Deployment secrets
+deploy/.env
