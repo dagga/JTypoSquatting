@@ -1,8 +1,6 @@
 package com.aleph.graymatter.jtyposquatting;
 
-import com.aleph.graymatter.jtyposquatting.generator.Dash;
-import com.aleph.graymatter.jtyposquatting.generator.Homoglyph;
-import com.aleph.graymatter.jtyposquatting.generator.Misspell;
+import com.aleph.graymatter.jtyposquatting.generator.Algorithm;
 import com.aleph.graymatter.jtyposquatting.generator.TLD;
 import com.aleph.graymatter.jtyposquatting.net.DomainName;
 import org.slf4j.Logger;
@@ -27,31 +25,18 @@ public class JTypoSquatting {
             throw e;
         }
 
-        ArrayList<DomainName> domainsArrayResults = new ArrayList<>();
-
-        // Generate typo variations
-        Misspell.AddMisspelledDomains(domainName, domainsArrayResults);
-        Homoglyph.addHomglyphedDomains(domainName, domainsArrayResults);
-        Dash.addDash(domainName, domainsArrayResults);
-        Dash.removeDash(domainName, domainsArrayResults);
-        
-        // Apply TLD variations to the ORIGINAL domain (not typo variations)
-        ArrayList<DomainName> tldVariations = new ArrayList<>();
-        TLD.AddAndReplaceAllTLD(domainName, tldVariations);
-        
-        // Combine: typo variations (with original TLD) + TLD variations (of original domain)
+        // Every algorithm is applied to the original domain; duplicates across algorithms are dropped
         java.util.Set<String> uniqueDomains = new java.util.LinkedHashSet<>();
-        
-        // Add typo variations first (use toString() to get full domain with TLD)
-        for (DomainName d : domainsArrayResults) {
-            uniqueDomains.add(d.toString());
+        for (Algorithm algorithm : Algorithm.values()) {
+            ArrayList<DomainName> variations = new ArrayList<>();
+            algorithm.generate(domainName, variations);
+            for (DomainName d : variations) {
+                uniqueDomains.add(d.toString());
+            }
+            log.debug("{} generated {} variations", algorithm.getId(), variations.size());
         }
-        
-        // Add TLD variations of original domain
-        for (DomainName d : tldVariations) {
-            uniqueDomains.add(d.toString());
-        }
-        
+        uniqueDomains.remove(domainName.toString());
+
         listOfDomains.addAll(uniqueDomains);
     }
 

@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Iterator;
 import java.util.Set;
 
@@ -67,7 +68,7 @@ public class Misspell {
         }
     }
 
-    public static void AddMisspelledDomains(DomainName domainName, ArrayList<DomainName> resultList) throws InvalidDomainException {
+    public static void AddMisspelledDomains(DomainName domainName, List<DomainName> resultList) throws InvalidDomainException {
         java.util.Map<String, java.util.List<String>> map = loadMisspellings();
         String domainWithoutTLD = DomainName.getDomainWithoutTLD(domainName.toString());
         String TLD = DomainName.getSuffix(domainName.toString());
