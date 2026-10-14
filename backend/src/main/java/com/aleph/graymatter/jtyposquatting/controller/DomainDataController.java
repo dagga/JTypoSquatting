@@ -5,6 +5,7 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
 import com.aleph.graymatter.jtyposquatting.service.PageAnalyzer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,8 +23,12 @@ import java.util.function.Consumer;
  * REST controller for domain data management operations.
  * Provides endpoints for analyzing domains, retrieving cached data, and statistics.
  * Uses Virtual Threads (Java 21+) for efficient I/O operations.
+ * <p>
+ * Legacy API of the desktop application: only loaded in local mode, because the cached data is
+ * shared by everyone. The web service uses {@code /api/scans}.
  */
 @RestController
+@ConditionalOnProperty(name = "jtypo.security.mode", havingValue = "local")
 @RequestMapping("/api/data")
 public class DomainDataController {
 

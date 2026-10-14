@@ -14,6 +14,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -33,14 +34,14 @@ class SecurityConfigTest {
         @Test
         @DisplayName("L'API refuse les appels non authentifiés avec 401 (pas de redirection)")
         void testApiRequiresAuthentication() throws Exception {
-            mvc.perform(get("/api/data/all")).andExpect(status().isUnauthorized());
-            mvc.perform(get("/api/generate-and-check").param("domain", "example.com")).andExpect(status().isUnauthorized());
+            mvc.perform(get("/api/scans")).andExpect(status().isUnauthorized());
+            mvc.perform(get("/api/scans/some-id/events")).andExpect(status().isUnauthorized());
         }
 
         @Test
         @DisplayName("Un utilisateur connecté accède à l'API et à son profil")
         void testAuthenticatedUser() throws Exception {
-            mvc.perform(get("/api/data/all").with(oidcLogin())).andExpect(status().isOk());
+            mvc.perform(get("/api/scans").with(oidcLogin())).andExpect(status().isOk());
             mvc.perform(get("/api/me").with(oidcLogin().idToken(token -> token
                             .subject("user-1")
                             .claim("preferred_username", "alice")
@@ -54,8 +55,12 @@ class SecurityConfigTest {
         @Test
         @DisplayName("Les requêtes modifiantes exigent un jeton CSRF")
         void testCsrfRequired() throws Exception {
-            mvc.perform(delete("/api/data/all").with(oidcLogin())).andExpect(status().isForbidden());
-            mvc.perform(delete("/api/data/all").with(oidcLogin()).with(csrf())).andExpect(status().isOk());
+            mvc.perform(post("/api/scans").with(oidcLogin())
+                            .contentType("application/json").content("{\"baseDomain\":\"example.com\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post("/api/scans").with(oidcLogin()).with(csrf())
+                            .contentType("application/json").content("{\"baseDomain\":\"example.com\"}"))
+                    .andExpect(status().isAccepted());
         }
 
         @Test
@@ -79,11 +84,11 @@ class SecurityConfigTest {
         @Test
         @DisplayName("Aucune origine tierce n'est autorisée par CORS")
         void testNoCrossOrigin() throws Exception {
-            mvc.perform(options("/api/data/all")
+            mvc.perform(options("/api/scans")
                             .header("Origin", "https://evil.example")
                             .header("Access-Control-Request-Method", "GET"))
                     .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
-            mvc.perform(get("/api/data/all").with(oidcLogin()).header("Origin", "http://localhost:8080"))
+            mvc.perform(get("/api/scans").with(oidcLogin()).header("Origin", "http://localhost:8080"))
                     .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
         }
     }
@@ -113,19 +118,25 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("Le quota d'analyses répond 429, y compris sur le flux SSE")
+        @DisplayName("Le quota d'analyses répond 429")
         void testScanQuota() throws Exception {
-            // Domaine invalide : l'analyse échoue immédiatement, sans requête réseau
-            mvc.perform(get("/api/generate-and-check").param("domain", "invalid")
-                            .accept("text/event-stream")
-                            .with(oidcLogin().idToken(t -> t.subject("quota-user"))))
-                    .andExpect(status().isOk());
-            mvc.perform(get("/api/generate-and-check").param("domain", "invalid")
-                            .accept("text/event-stream")
-                            .with(oidcLogin().idToken(t -> t.subject("quota-user"))))
+            mvc.perform(post("/api/scans").with(oidcLogin().idToken(t -> t.subject("quota-user"))).with(csrf())
+                            .contentType("application/json").content("{\"baseDomain\":\"example.com\"}"))
+                    .andExpect(status().isAccepted());
+            mvc.perform(post("/api/scans").with(oidcLogin().idToken(t -> t.subject("quota-user"))).with(csrf())
+                            .contentType("application/json").content("{\"baseDomain\":\"example.org\"}"))
                     .andExpect(status().isTooManyRequests())
                     .andExpect(header().exists("Retry-After"))
                     .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("Daily")));
+        }
+
+        @Test
+        @DisplayName("Les anciens endpoints du mode bureau n'existent pas en mode web")
+        void testLegacyEndpointsAbsent() throws Exception {
+            mvc.perform(get("/api/data/all").with(oidcLogin())).andExpect(status().isNotFound());
+            mvc.perform(get("/api/cancel").with(oidcLogin())).andExpect(status().isNotFound());
+            mvc.perform(get("/api/generate-and-check").param("domain", "example.com").with(oidcLogin()))
+                    .andExpect(status().isNotFound());
         }
     }
 

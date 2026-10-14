@@ -10,8 +10,9 @@
 
 1. [Overview](#1-overview)
 2. [Authentication](#2-authentication)
-3. [Domain Generation & Checking Endpoints](#3-domain-generation--checking-endpoints)
-4. [Data Management Endpoints](#4-data-management-endpoints)
+3. [Scans (web service)](#3-scans-web-service)
+   - [Domain Generation & Checking Endpoints (desktop only)](#3bis-domain-generation--checking-endpoints-desktop-application-only)
+4. [Data Management Endpoints (desktop only)](#4-data-management-endpoints-desktop-application-only)
 5. [Data Transfer Objects](#5-data-transfer-objects)
 6. [Error Handling](#6-error-handling)
 7. [Server-Sent Events](#7-server-sent-events)
@@ -30,8 +31,34 @@
 
 ### 1.2 Endpoints Summary
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
+**Web service** (all modes; login required in web mode, see [Authentication](#2-authentication)):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/me` | Current user |
+| POST | `/scans` | Queue a scan (202) |
+| GET | `/scans` | Last 50 scans of the user |
+| GET | `/scans/{id}` | Scan status and counters |
+| GET | `/scans/{id}/results?after=&limit=` | Results, page by page |
+| GET | `/scans/{id}/events` | Live results (SSE, resumable with `Last-Event-ID`) |
+| DELETE | `/scans/{id}` | Cancel a scan |
+
+**Desktop application only** (`jtypo.security.mode=local`; these endpoints do not exist in web mode
+because they act on the data and analyses of every user):
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/generate-and-check` | Generate and check domains (SSE) |
+| GET | `/cancel` | Cancel every active analysis |
+| DELETE | `/cancel-and-clear` | Cancel every analysis and clear the cache |
+| GET | `/data/analyze-and-save` | Analyze domain and save (SSE) |
+| GET | `/data/analyze` | Analyze single domain |
+| GET | `/data/cached/{domain}` | Get cached domain data |
+| GET | `/data/all` | Get all cached domains |
+| DELETE | `/data/all` | Clear all cached data |
+| GET | `/data/stats` | Get statistics |
+
+--------|----------|-------------|------|
 | GET | `/generate-and-check` | Generate and check domains (SSE) | No |
 | GET | `/cancel` | Cancel active analysis | No |
 | GET | `/data/analyze-and-save` | Analyze domain and save (SSE) | No |
@@ -84,7 +111,73 @@ authentication. `GET /api/me` returns **204 No Content**. Never use this mode on
 
 ---
 
-## 3. Domain Generation & Checking Endpoints
+## 3. Scans (web service)
+
+A scan generates the typo variants of a domain and checks them. It is queued, processed by a worker
+(possibly on another instance), and its results are stored, so the browser can be closed and the scan
+followed again later.
+
+### 3.0.1 Queue a scan
+
+```http
+POST /api/scans
+Content-Type: application/json
+X-XSRF-TOKEN: <XSRF-TOKEN cookie value>
+
+{ "baseDomain": "example.com", "forceRefresh": false }
+```
+
+**202 Accepted**, `Location: /api/scans/{id}`:
+
+```json
+{
+  "id": "3f0c9a2e-...", "baseDomain": "example.com", "status": "PENDING",
+  "totalDomains": 0, "checkedDomains": 0,
+  "createdAt": "2026-10-14T17:02:11.123Z", "startedAt": null, "finishedAt": null, "error": null
+}
+```
+
+`status`: `PENDING`, `RUNNING`, `COMPLETED`, `CANCELLED`, `FAILED`. Errors: 400 (invalid domain),
+429 (quota: simultaneous scans or scans per 24 hours, computed from the database).
+Internationalised domains are accepted (`exämple.com`) and stored in punycode.
+
+### 3.0.2 Follow a scan (SSE)
+
+```http
+GET /api/scans/{id}/events
+Accept: text/event-stream
+Last-Event-ID: 1234        (optional, sent automatically by browsers when they reconnect)
+```
+
+| Event | Data | Notes |
+|-------|------|-------|
+| `result` | one checked domain (see below) | `id:` = result id, used by `Last-Event-ID` |
+| `progress` | the scan (same format as above) | sent when status or counters change |
+| `end` | the final scan | the stream is then closed |
+
+A comment line (`: keep-alive`) is sent every 15 s without activity. Streams last at most 30 minutes;
+the browser reconnects by itself and only receives the results it missed.
+
+```json
+{
+  "id": 1234, "domain": "ехаmple.com", "domainAscii": "xn--mple-43d4a.com",
+  "status": "Suspicious", "httpCode": 200, "tlsStatus": "UNTRUSTED",
+  "title": "Example", "language": "ENGLISH", "description": "...", "homepageText": "...",
+  "httpHeaders": { "Server": "nginx" }, "screenshotUrl": null, "checkedAt": "2026-10-14T17:02:15.456Z"
+}
+```
+
+### 3.0.3 Other operations
+
+- `GET /api/scans/{id}/results?after=0&limit=100`: results with an id greater than `after` (max 500 per page).
+- `DELETE /api/scans/{id}`: **204** if the scan was active and is cancelled, **409** if it was already finished.
+- A scan of another user returns **403**, an unknown scan **404**.
+
+---
+
+## 3bis. Domain Generation & Checking Endpoints (desktop application only)
+
+These endpoints exist only in local mode (`jtypo.security.mode=local`). The web service uses [Scans](#3-scans-web-service).
 
 ### 3.1 Generate and Check Domains
 
@@ -170,7 +263,9 @@ GET /api/cancel
 
 ---
 
-## 4. Data Management Endpoints
+## 4. Data Management Endpoints (desktop application only)
+
+These endpoints exist only in local mode: the cached data is shared by everyone.
 
 ### 4.1 Analyze and Save (SSE)
 
