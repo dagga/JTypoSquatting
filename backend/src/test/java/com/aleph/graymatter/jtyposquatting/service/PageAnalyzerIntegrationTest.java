@@ -7,7 +7,6 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -22,11 +21,10 @@ import static org.mockito.Mockito.when;
  * Tests real domain analysis including screenshot capture.
  *
  * <p>Ces tests requièrent un accès réseau (la capture d'écran est simulée).
- * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
- * {@code ./gradlew test -Dexclude.network=true}
+ * Ils sont marqués {@code @Tag("network")} et ne sont lancés que sur demande :
+ * {@code ./gradlew test -Dinclude.network=true}
  */
 @Tag("network")
-@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
 @SpringBootTest
 @ActiveProfiles("test")
 class PageAnalyzerIntegrationTest {

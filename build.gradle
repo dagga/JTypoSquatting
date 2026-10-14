@@ -36,10 +36,14 @@ subprojects {
     }
 
     test {
-        useJUnitPlatform()
-        // Propager le flag réseau/X11 aux tests :
-        // ./gradlew test -Dexclude.network=true  →  exclut @DisabledIfSystemProperty(named="exclude.network")
-        systemProperty 'exclude.network', System.getProperty('exclude.network', 'false')
+        // Tests that contact real Internet sites (@Tag("network")) are opt-in:
+        //   ./gradlew test -Dinclude.network=true
+        // Testcontainers tests (MySQL, S3) run when a container engine is available, and are skipped otherwise.
+        useJUnitPlatform {
+            if (System.getProperty('include.network') != 'true') {
+                excludeTags 'network'
+            }
+        }
         jvmArgs = []
     }
 }
