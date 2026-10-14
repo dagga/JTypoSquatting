@@ -51,6 +51,10 @@ class S3ScreenshotStoreTest {
             assertEquals(key, store.put(png.clone()));
             assertArrayEquals(png, store.get(key).orElseThrow());
             assertTrue(store.get(ScreenshotStore.keyOf("f".repeat(64))).isEmpty());
+
+            store.delete(key);
+            assertTrue(store.get(key).isEmpty());
+            store.delete(key); // sans effet si absente
         }
     }
 }

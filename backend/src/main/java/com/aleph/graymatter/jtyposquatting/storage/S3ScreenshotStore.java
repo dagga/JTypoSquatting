@@ -41,6 +41,11 @@ public class S3ScreenshotStore implements ScreenshotStore {
         }
     }
 
+    @Override
+    public void delete(String key) {
+        s3.deleteObject(builder -> builder.bucket(bucket).key(key));
+    }
+
     private boolean exists(String key) {
         try {
             s3.headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build());

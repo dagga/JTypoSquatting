@@ -372,6 +372,23 @@ the standard output of the containers, ready for a log collector.
 `deploy/prometheus/` contains a scrape configuration and alert rules: instance down, scans waiting with
 no worker processing them, queue backlog, scan, API and screenshot failure rates, rate-limit spike.
 
+### Backups and data retention
+
+- `deploy/backup/mysql-backup.sh [dir]`: consistent dump (InnoDB, no lock), gzip, completion check,
+  keeps the last `KEEP` (14) backups. Schedule it daily.
+- `deploy/backup/mysql-restore-test.sh <file>`: restores a backup into a throw-away MySQL container and
+  checks the schema. Run it regularly: an untested backup is not a backup.
+- `deploy/backup/mysql-restore.sh <file>`: restores into the deployment (stop `api` and `worker` first).
+- Screenshots are in the S3 storage: enable versioning or replication on the bucket.
+
+Workers purge old data every night (`jtypo.retention.cron`, 03:30):
+
+| Property | Default | Deleted |
+|----------|---------|---------|
+| `jtypo.retention.scan-days` | 90 | Finished scans and their results (running scans are never purged) |
+| `jtypo.retention.check-days` | 30 | Cached domain checks |
+| — | — | Screenshots no longer referenced by any result or cached check |
+
 ### Continuous integration and delivery
 
 The `Build and Release` workflow runs the backend tests (with Testcontainers on the Docker engine of the
