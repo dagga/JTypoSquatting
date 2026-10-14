@@ -81,6 +81,12 @@ public class ScanService {
         return scan;
     }
 
+    /** @return true if the scan was active and is now cancelled; the worker stops at its next heartbeat */
+    public boolean cancelScan(ScanUser user, String scanId) {
+        getScan(user, scanId);
+        return scans.cancel(scanId, clock.instant());
+    }
+
     public List<Scan> listScans(ScanUser user, int limit) {
         return scans.findByUser(user.id(), limit);
     }
