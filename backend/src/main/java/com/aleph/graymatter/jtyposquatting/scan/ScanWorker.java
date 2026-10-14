@@ -1,10 +1,7 @@
 package com.aleph.graymatter.jtyposquatting.scan;
 
 import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
-import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
-import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.persistence.DomainKeys;
-import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +42,7 @@ public class ScanWorker {
 
     private final ScanRepository scans;
     private final ScanResultRepository results;
-    private final DomainCheckService domainCheckService;
+    private final DomainChecker domainChecker;
     private final int maxDomainsPerScan;
     private final Duration heartbeatInterval;
     private final Duration staleAfter;
@@ -58,14 +55,14 @@ public class ScanWorker {
             Thread.ofPlatform().name("scan-heartbeat").daemon().factory());
     private volatile boolean stopping;
 
-    public ScanWorker(ScanRepository scans, ScanResultRepository results, DomainCheckService domainCheckService,
+    public ScanWorker(ScanRepository scans, ScanResultRepository results, DomainChecker domainChecker,
                       @Value("${jtypo.worker.max-concurrent-scans:4}") int maxConcurrentScans,
                       @Value("${jtypo.quota.max-domains-per-scan:3000}") int maxDomainsPerScan,
                       @Value("${jtypo.worker.heartbeat-interval-ms:5000}") long heartbeatIntervalMillis,
                       @Value("${jtypo.worker.stale-after-ms:120000}") long staleAfterMillis) {
         this.scans = scans;
         this.results = results;
-        this.domainCheckService = domainCheckService;
+        this.domainChecker = domainChecker;
         this.maxDomainsPerScan = maxDomainsPerScan;
         this.heartbeatInterval = Duration.ofMillis(heartbeatIntervalMillis);
         this.staleAfter = Duration.ofMillis(staleAfterMillis);
@@ -133,8 +130,8 @@ public class ScanWorker {
                     if (stopped.get() || Thread.currentThread().isInterrupted()) {
                         return;
                     }
-                    DomainResultDTO result = domainCheckService.analyze(domain);
-                    if (!stopped.get() && results.insert(toScanResult(scanId, domain, result))) {
+                    DomainCheck check = domainChecker.check(domain, scan.forceRefresh());
+                    if (!stopped.get() && results.insert(check.toScanResult(scanId))) {
                         checked.incrementAndGet();
                     }
                 }));
@@ -179,13 +176,6 @@ public class ScanWorker {
             domains = domains.subList(0, maxDomainsPerScan);
         }
         return domains;
-    }
-
-    private ScanResult toScanResult(String scanId, String domain, DomainResultDTO result) {
-        DomainStatus status = result.getStatus() != null ? result.getStatus() : DomainStatus.UNKNOWN;
-        return new ScanResult(0, scanId, domain, DomainKeys.toUnicode(domain), status, result.getHttpCode(),
-                result.getTlsStatus(), result.getTitle(), result.getLanguage(), result.getDescription(),
-                result.getHomepageText(), result.getHttpHeaders(), null, clock.instant());
     }
 
     @PreDestroy

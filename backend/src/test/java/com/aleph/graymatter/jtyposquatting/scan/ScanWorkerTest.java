@@ -81,7 +81,7 @@ class ScanWorkerTest {
     @Test
     @DisplayName("Une analyse est traitée jusqu'au bout, chaque domaine une seule fois")
     void testScanCompletes() throws Exception {
-        Scan scan = scanService.createScan(new ScanUser("worker-user", "w", null), "example.com", false);
+        Scan scan = scanService.createScan(new ScanUser("worker-user", "w", null), "complete-test.com", false);
 
         await(() -> statusOf(scan.id()) == ScanStatus.COMPLETED, "scan completed");
 
@@ -92,7 +92,7 @@ class ScanWorkerTest {
         assertEquals(200, stored.size());
         Set<String> domains = new HashSet<>();
         stored.forEach(r -> assertTrue(domains.add(r.domain()), "doublon " + r.domain()));
-        assertFalse(domains.contains("example.com"));
+        assertFalse(domains.contains("complete-test.com"));
         assertNotNull(done.startedAt());
         assertNotNull(done.finishedAt());
     }
@@ -104,7 +104,7 @@ class ScanWorkerTest {
             Thread.sleep(200);
             return new DomainResultDTO(invocation.getArgument(0), DomainStatus.UNREACHABLE, "", "", "", 0, null, "", null);
         });
-        Scan scan = scanService.createScan(new ScanUser("cancel-user", "c", null), "example.org", false);
+        Scan scan = scanService.createScan(new ScanUser("cancel-user", "c", null), "cancel-test.org", false);
         await(() -> statusOf(scan.id()) == ScanStatus.RUNNING, "scan running");
 
         assertTrue(scans.cancel(scan.id(), Instant.now()));
@@ -120,17 +120,54 @@ class ScanWorkerTest {
     @Test
     @DisplayName("Une analyse abandonnée par un worker en panne est reprise sans revérifier les domaines déjà faits")
     void testTakeoverOfStaleScan() throws Exception {
-        Scan scan = scanService.createScan(new ScanUser("takeover-user", "t", null), "example.net", false);
+        Scan scan = scanService.createScan(new ScanUser("takeover-user", "t", null), "takeover-test.net", false);
         // Simule un worker mort : analyse RUNNING, battement de cœur ancien, un résultat déjà enregistré
         Instant longAgo = Instant.now().minus(Duration.ofMinutes(10));
         jdbc.update("UPDATE scans SET status = 'RUNNING', worker_id = 'dead-worker', heartbeat_at = ?, started_at = ? WHERE id = ?",
                 Timestamp.from(longAgo), Timestamp.from(longAgo), scan.id());
-        results.insert(new ScanResult(0, scan.id(), "exmple.net", "exmple.net", DomainStatus.SAFE, 200,
+        results.insert(new ScanResult(0, scan.id(), "takever-test.net", "takever-test.net", DomainStatus.SAFE, 200,
                 TlsStatus.VALID, null, null, null, null, null, null, longAgo));
 
         await(() -> statusOf(scan.id()) == ScanStatus.COMPLETED, "scan taken over and completed");
 
-        verify(domainCheckService, never()).analyze("exmple.net");
+        verify(domainCheckService, never()).analyze("takever-test.net");
         assertEquals(200, results.countByScan(scan.id()));
+    }
+
+    @Test
+    @DisplayName("Cache partagé : une seconde analyse du même domaine ne revérifie rien, sauf forceRefresh")
+    void testSharedCache() throws Exception {
+        Scan first = scanService.createScan(new ScanUser("cache-user-1", "a", null), "cache-test.com", false);
+        await(() -> statusOf(first.id()) == ScanStatus.COMPLETED, "first scan completed");
+        verify(domainCheckService, times(200)).analyze(anyString());
+        clearInvocations(domainCheckService);
+
+        // Autre utilisateur, même domaine : tout vient du cache
+        Scan second = scanService.createScan(new ScanUser("cache-user-2", "b", null), "cache-test.com", false);
+        await(() -> statusOf(second.id()) == ScanStatus.COMPLETED, "second scan completed");
+        verify(domainCheckService, never()).analyze(anyString());
+        assertEquals(200, results.countByScan(second.id()));
+        assertEquals("Title", results.findAfter(second.id(), 0, 1).get(0).title());
+
+        // forceRefresh : chaque domaine est vérifié de nouveau
+        Scan third = scanService.createScan(new ScanUser("cache-user-3", "c", null), "cache-test.com", true);
+        await(() -> statusOf(third.id()) == ScanStatus.COMPLETED, "forced scan completed");
+        verify(domainCheckService, times(200)).analyze(anyString());
+    }
+
+    @Test
+    @DisplayName("Cache partagé : une vérification plus ancienne que la durée de validité est refaite")
+    void testCacheExpiry(@Autowired DomainCheckRepository cache, @Autowired DomainChecker checker) {
+        Instant old = Instant.now().minus(Duration.ofHours(25));
+        cache.save(new DomainCheck("expired-test.com", "expired-test.com", DomainStatus.SAFE, 200, TlsStatus.VALID,
+                "Old", null, null, null, null, null, old));
+        cache.save(new DomainCheck("fresh-test.com", "fresh-test.com", DomainStatus.SAFE, 200, TlsStatus.VALID,
+                "Fresh", null, null, null, null, null, Instant.now()));
+
+        assertEquals("Fresh", checker.check("fresh-test.com", false).title());
+        assertEquals("Title", checker.check("expired-test.com", false).title());
+        verify(domainCheckService, never()).analyze("fresh-test.com");
+        verify(domainCheckService, times(1)).analyze("expired-test.com");
+        assertEquals("Title", cache.find("expired-test.com").orElseThrow().title(), "le cache est mis à jour");
     }
 }

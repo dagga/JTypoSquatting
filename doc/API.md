@@ -137,6 +137,9 @@ X-XSRF-TOKEN: <XSRF-TOKEN cookie value>
 }
 ```
 
+`forceRefresh`: by default, a domain checked less than `jtypo.cache.ttl-hours` (24) ago, by any user,
+is taken from the shared cache instead of being checked again; `true` checks every domain again.
+
 `status`: `PENDING`, `RUNNING`, `COMPLETED`, `CANCELLED`, `FAILED`. Errors: 400 (invalid domain),
 429 (quota: simultaneous scans or scans per 24 hours, computed from the database).
 Internationalised domains are accepted (`exämple.com`) and stored in punycode.

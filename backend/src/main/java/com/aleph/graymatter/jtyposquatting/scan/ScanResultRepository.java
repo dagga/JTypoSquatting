@@ -82,9 +82,6 @@ public class ScanResultRepository {
     }
 
     private static String truncate(String value, int max) {
-        if (value == null || value.length() <= max) {
-            return value;
-        }
-        return value.substring(0, max - 1) + "…";
+        return DomainCheckRepository.truncate(value, max);
     }
 }
