@@ -72,6 +72,11 @@ Returns the logged-in user.
 { "id": "f3c1...", "username": "alice", "name": "Alice Dev", "email": "alice@example.com" }
 ```
 
+Security headers on every response: `Content-Security-Policy` (`default-src 'none'`), `Referrer-Policy`,
+`Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options` and, over HTTPS, `Strict-Transport-Security`.
+CORS is disabled: the frontend and the API are served from the same origin by the reverse proxy.
+Behind the proxy, set `FORWARD_HEADERS_STRATEGY=framework` so that HTTPS and the public host are detected.
+
 ### 2.2 Desktop mode (`local`)
 
 Set by the all-in-one JAR (`CombinedLauncher`): the API listens on `127.0.0.1` only and requires no

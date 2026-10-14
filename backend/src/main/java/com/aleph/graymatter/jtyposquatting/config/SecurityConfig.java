@@ -13,6 +13,8 @@ import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInit
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
+import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -37,6 +39,9 @@ import java.util.function.Supplier;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
+
+    static final String API_CONTENT_SECURITY_POLICY = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
+    static final String PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()";
 
     @Bean
     @ConditionalOnProperty(name = "jtypo.security.mode", havingValue = "oidc", matchIfMissing = true)
@@ -72,7 +77,13 @@ public class SecurityConfig {
                         PathPatternRequestMatcher.withDefaults().matcher("/api/**")))
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
-                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()));
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+                // The backend only serves JSON and redirects; the Next.js frontend sets its own CSP.
+                // HSTS is sent on HTTPS requests (behind the proxy: server.forward-headers-strategy=framework)
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(API_CONTENT_SECURITY_POLICY))
+                        .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .addHeaderWriter(new StaticHeadersWriter("Permissions-Policy", PERMISSIONS_POLICY)));
         return http.build();
     }
 

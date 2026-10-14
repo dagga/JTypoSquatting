@@ -13,6 +13,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.oidcLogin;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
@@ -55,6 +56,35 @@ class SecurityConfigTest {
         void testCsrfRequired() throws Exception {
             mvc.perform(delete("/api/data/all").with(oidcLogin())).andExpect(status().isForbidden());
             mvc.perform(delete("/api/data/all").with(oidcLogin()).with(csrf())).andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("En-têtes de sécurité présents sur les réponses de l'API")
+        void testSecurityHeaders() throws Exception {
+            mvc.perform(get("/api/me").with(oidcLogin()))
+                    .andExpect(header().string("Content-Security-Policy", SecurityConfig.API_CONTENT_SECURITY_POLICY))
+                    .andExpect(header().string("Referrer-Policy", "strict-origin-when-cross-origin"))
+                    .andExpect(header().string("Permissions-Policy", SecurityConfig.PERMISSIONS_POLICY))
+                    .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                    .andExpect(header().string("X-Frame-Options", "DENY"));
+        }
+
+        @Test
+        @DisplayName("HSTS est envoyé sur les requêtes HTTPS")
+        void testHsts() throws Exception {
+            mvc.perform(get("/api/me").secure(true).with(oidcLogin()))
+                    .andExpect(header().exists("Strict-Transport-Security"));
+        }
+
+        @Test
+        @DisplayName("Aucune origine tierce n'est autorisée par CORS")
+        void testNoCrossOrigin() throws Exception {
+            mvc.perform(options("/api/data/all")
+                            .header("Origin", "https://evil.example")
+                            .header("Access-Control-Request-Method", "GET"))
+                    .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+            mvc.perform(get("/api/data/all").with(oidcLogin()).header("Origin", "http://localhost:8080"))
+                    .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
         }
     }
 
