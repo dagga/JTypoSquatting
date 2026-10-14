@@ -1,0 +1,15 @@
+# Build contexts of backend/Dockerfile (project root) and web/Dockerfile (web/)
+.git
+.gradle
+.idea
+.vscode
+**/build
+**/node_modules
+**/.next
+**/test-results
+**/playwright-report
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.mv.db
+.aider*
+dist

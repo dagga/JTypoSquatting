@@ -30,6 +30,8 @@ class DeploymentProfilesTest {
             assertFalse(context instanceof WebServerApplicationContext);
             assertEquals(1, context.getBeansOfType(ScanWorker.class).size());
             assertTrue(context.getBeansOfType(SecurityFilterChain.class).isEmpty());
+            // Only daemon threads remain without a web server: the JVM would exit right after startup
+            assertEquals("true", context.getEnvironment().getProperty("spring.main.keep-alive"));
         }
     }
 

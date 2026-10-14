@@ -130,6 +130,8 @@ project(':backend') {
     // Configure Spring Boot to find the main class
     tasks.withType(org.springframework.boot.gradle.tasks.bundling.BootJar) {
         mainClass = 'com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication'
+        // Fixed name for the container images
+        archiveFileName = 'jtyposquatting-backend.jar'
     }
 
     // Installs the Chromium build used by Playwright for screenshots.

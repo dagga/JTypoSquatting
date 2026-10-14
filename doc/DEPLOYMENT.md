@@ -326,6 +326,31 @@ Main environment variables:
 
 Development services (MySQL, Keycloak) are described in `docker-compose.yml`.
 
+### Containers
+
+| Image | Dockerfile | Contents |
+|-------|-----------|----------|
+| API | `backend/Dockerfile`, target `api` | Temurin 21 JRE, unprivileged user |
+| Worker | `backend/Dockerfile`, target `worker` | Playwright Java 1.63 image (Java 21 + Chromium), user `pwuser` |
+| Frontend | `web/Dockerfile` | Next.js standalone server on Node 22 |
+
+`deploy/docker-compose.prod.yml` assembles nginx (`deploy/nginx/jtyposquatting.conf`), the frontend, the
+API, the workers and MySQL; the identity provider and the S3 storage are external. Copy
+`deploy/.env.example` to `deploy/.env`, then:
+
+```bash
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+```
+
+- nginx serves the frontend and the API on the same origin, disables buffering for the SSE streams and
+  limits the request rate (API and login).
+- Containers run without capabilities, with a read-only root filesystem.
+- Workers are on an internal network (MySQL) and an egress network (Internet) only. Also block the private
+  ranges of the egress network on the host firewall (`DOCKER-USER` chain): the application-level anti-SSRF
+  policy is the first barrier, the network the second. The Chromium sandbox is disabled in the container
+  (no user namespaces): the container is the sandbox.
+- Terminate TLS in front of nginx (or add a 443 server) and set `X-Forwarded-Proto` accordingly.
+
 ---
 
 ## 6. Native Installers
