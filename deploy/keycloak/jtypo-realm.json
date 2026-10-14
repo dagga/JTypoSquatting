@@ -23,13 +23,16 @@
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
+        "http://localhost:3000/login/oauth2/code/oidc",
         "http://localhost:8081/login/oauth2/code/oidc",
         "http://localhost/login/oauth2/code/oidc"
       ],
-      "webOrigins": ["+"],
+      "webOrigins": [
+        "+"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:8081/*##http://localhost/*"
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:8081/*##http://localhost/*"
       }
     }
   ],
@@ -41,7 +44,13 @@
       "lastName": "Dev",
       "enabled": true,
       "emailVerified": true,
-      "credentials": [{ "type": "password", "value": "alice", "temporary": false }]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "alice",
+          "temporary": false
+        }
+      ]
     }
   ]
 }

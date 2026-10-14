@@ -11,7 +11,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInitiatedLogoutSuccessHandler;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
@@ -60,12 +59,11 @@ public class SecurityConfig {
     @ConditionalOnProperty(name = "jtypo.security.mode", havingValue = "oidc", matchIfMissing = true)
     SecurityFilterChain oidcSecurityFilterChain(HttpSecurity http,
                                                 ClientRegistrationRepository clientRegistrations,
-                                                @Value("${jtypo.security.post-login-url:/}") String postLoginUrl,
+                                                @Value("${jtypo.security.post-login-url:/app}") String postLoginUrl,
                                                 @Value("${jtypo.security.post-logout-url:{baseUrl}/}") String postLogoutUrl,
                                                 @Value("${jtypo.rate-limit.requests-per-minute:120}") int requestsPerMinute)
             throws Exception {
-        OidcClientInitiatedLogoutSuccessHandler logoutSuccessHandler = new OidcClientInitiatedLogoutSuccessHandler(clientRegistrations);
-        logoutSuccessHandler.setPostLogoutRedirectUri(postLogoutUrl);
+        JsonLogoutSuccessHandler logoutSuccessHandler = new JsonLogoutSuccessHandler(clientRegistrations, postLogoutUrl);
 
         http
                 .authorizeHttpRequests(auth -> auth
