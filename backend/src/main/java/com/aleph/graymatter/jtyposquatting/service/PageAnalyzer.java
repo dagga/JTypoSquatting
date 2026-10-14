@@ -66,7 +66,6 @@ public class PageAnalyzer {
             )
             .build();
 
-    private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
     private static final int MAX_REDIRECTS = 5;
     private static final int MAX_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -97,7 +96,7 @@ public class PageAnalyzer {
                 .disableRedirectHandling()
                 .disableAutomaticRetries()
                 .disableCookieManagement()
-                .setUserAgent(USER_AGENT)
+                .setUserAgent(outboundPolicy.getUserAgent())
                 .setDefaultRequestConfig(RequestConfig.custom().setResponseTimeout(Timeout.ofSeconds(10)).build())
                 .build();
     }
