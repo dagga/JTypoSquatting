@@ -166,7 +166,7 @@ the browser reconnects by itself and only receives the results it missed.
   "id": 1234, "domain": "ехаmple.com", "domainAscii": "xn--mple-43d4a.com",
   "status": "Suspicious", "httpCode": 200, "tlsStatus": "UNTRUSTED",
   "title": "Example", "language": "ENGLISH", "description": "...", "homepageText": "...",
-  "httpHeaders": { "Server": "nginx" }, "screenshotUrl": null, "checkedAt": "2026-10-14T17:02:15.456Z"
+  "httpHeaders": { "Server": "nginx" }, "screenshotUrl": "/api/screenshots/9f86d0…", "checkedAt": "2026-10-14T17:02:15.456Z"
 }
 ```
 
@@ -175,6 +175,26 @@ the browser reconnects by itself and only receives the results it missed.
 - `GET /api/scans/{id}/results?after=0&limit=100`: results with an id greater than `after` (max 500 per page).
 - `DELETE /api/scans/{id}`: **204** if the scan was active and is cancelled, **409** if it was already finished.
 - A scan of another user returns **403**, an unknown scan **404**.
+
+### 3.0.4 Screenshots
+
+`GET /api/screenshots/{sha256}` returns the PNG (`Cache-Control: private, immutable`). Screenshots are
+stored outside the database, addressed by the SHA-256 of their content (a parking page shared by many
+domains is stored once). A screenshot is served only to a user who owns a scan containing it; otherwise
+**404**. Events carry the URL (`screenshotUrl`), never the image itself.
+
+| Property | Environment variable | Description |
+|----------|---------------------|-------------|
+| `jtypo.storage.type` | `STORAGE_TYPE` | `filesystem` (default: desktop, development) or `s3` (web service) |
+| `jtypo.storage.directory` | `STORAGE_DIRECTORY` | Directory of the `filesystem` store |
+| `jtypo.storage.s3.endpoint` | `S3_ENDPOINT` | Endpoint of an S3-compatible service (empty for AWS) |
+| `jtypo.storage.s3.region` | `S3_REGION` | Region |
+| `jtypo.storage.s3.bucket` | `S3_BUCKET` | Bucket (must exist) |
+| `jtypo.storage.s3.access-key` / `secret-key` | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credentials |
+| `jtypo.storage.s3.path-style` | `S3_PATH_STYLE` | Path-style URLs (most self-hosted services) |
+
+Any S3-compatible service works (AWS S3, Scaleway, OVHcloud, Garage, SeaweedFS…). The community MinIO
+images are no longer published on Docker Hub; the tests use S3Mock.
 
 ---
 

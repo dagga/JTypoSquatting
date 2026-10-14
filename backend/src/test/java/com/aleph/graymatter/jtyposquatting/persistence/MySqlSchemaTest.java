@@ -45,7 +45,7 @@ class MySqlSchemaTest {
     void testMigrationsApplied() {
         Integer applied = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IS NOT NULL", Integer.class);
-        assertEquals(3, applied);
+        assertEquals(4, applied);
         assertEquals("8.4", jdbc.queryForObject("SELECT LEFT(VERSION(), 3)", String.class));
     }
 

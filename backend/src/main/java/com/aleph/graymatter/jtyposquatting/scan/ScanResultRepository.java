@@ -77,6 +77,14 @@ public class ScanResultRepository {
         return new HashSet<>(jdbc.queryForList("SELECT domain FROM scan_results WHERE scan_id = ?", String.class, scanId));
     }
 
+    /** True if one of the user's scans contains this screenshot. */
+    public boolean isScreenshotVisibleTo(String screenshotKey, String userId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT COUNT(*) > 0 FROM scan_results r JOIN scans s ON s.id = r.scan_id
+                WHERE r.screenshot_key = ? AND s.user_id = ?
+                """, Boolean.class, screenshotKey, userId));
+    }
+
     public int countByScan(String scanId) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM scan_results WHERE scan_id = ?", Integer.class, scanId);
     }
