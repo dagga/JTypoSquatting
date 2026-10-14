@@ -1,6 +1,7 @@
 package com.aleph.graymatter.jtyposquatting.service;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
+import com.aleph.graymatter.jtyposquatting.security.OutboundPolicy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -33,9 +34,9 @@ class PageAnalyzerFunctionalTest {
         boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
         if (isCI) {
             // In CI, return dummy screenshot data
-            pageAnalyzer = new PageAnalyzer(url -> new byte[1024]);
+            pageAnalyzer = new PageAnalyzer(url -> new byte[1024], new OutboundPolicy(false, java.util.Set.of(80, 443)));
         } else {
-            pageAnalyzer = new PageAnalyzer(new JavaFXScreenshotService());
+            pageAnalyzer = new PageAnalyzer(new JavaFXScreenshotService(), new OutboundPolicy(false, java.util.Set.of(80, 443)));
         }
     }
 

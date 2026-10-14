@@ -52,7 +52,7 @@ public class DomainCheckService {
                 byte[] screenshot = pageData.getScreenshot();
                 logger.debug("Sending result for {} with screenshot: {} bytes", domain, screenshot != null ? screenshot.length : 0);
 
-                return new DomainResultDTO(
+                DomainResultDTO result = new DomainResultDTO(
                         domain,
                         domainStatus,
                         title,
@@ -63,6 +63,8 @@ public class DomainCheckService {
                         pageData.getHomepageText(),
                         pageData.getHttpHeaders()
                 );
+                result.setTlsStatus(pageData.getTlsStatus());
+                return result;
             } else {
                 // No HTTP code (timeout, unknown host, etc.) -> Unreachable (should be removed from list)
                 return new DomainResultDTO(

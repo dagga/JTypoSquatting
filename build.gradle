@@ -92,6 +92,9 @@ project(':backend') {
         // JSoup for HTML parsing
         implementation 'org.jsoup:jsoup:1.17.2'
 
+        // HTTP client with pluggable DNS resolver (anti-SSRF)
+        implementation 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+
         // Language detection
         implementation 'com.github.pemistahl:lingua:1.2.1'
 
