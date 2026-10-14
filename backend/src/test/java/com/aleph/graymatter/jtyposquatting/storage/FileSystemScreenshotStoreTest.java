@@ -25,6 +25,10 @@ class FileSystemScreenshotStoreTest {
         assertEquals(key, store.put(png.clone()));
         assertArrayEquals(png, store.get(key).orElseThrow());
         assertTrue(store.get(ScreenshotStore.keyOf("0".repeat(64))).isEmpty());
+
+        store.delete(key);
+        assertTrue(store.get(key).isEmpty());
+        store.delete(key); // sans effet si absente
     }
 
     @Test

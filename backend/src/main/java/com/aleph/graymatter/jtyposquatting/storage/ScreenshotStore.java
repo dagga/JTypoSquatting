@@ -19,6 +19,9 @@ public interface ScreenshotStore {
 
     Optional<byte[]> get(String key);
 
+    /** Deletes a screenshot; no effect if it does not exist. */
+    void delete(String key);
+
     static String hash(byte[] content) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
