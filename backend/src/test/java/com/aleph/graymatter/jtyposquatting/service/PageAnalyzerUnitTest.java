@@ -138,4 +138,26 @@ class PageAnalyzerUnitTest {
         assertEquals(200, result.getHttpCode());
         assertTrue(result.getHtmlContent().length() <= 2 * 1024 * 1024);
     }
+
+    @Test
+    @DisplayName("Un domaine internationalisé (homoglyphe) est contacté sous sa forme punycode")
+    void testAnalyzePage_InternationalizedDomain() {
+        java.util.List<String> checkedHosts = new java.util.ArrayList<>();
+        OutboundPolicy recordingPolicy = new OutboundPolicy(true, java.util.Set.of()) {
+            @Override
+            public void checkUrl(java.net.URI uri) throws com.aleph.graymatter.jtyposquatting.security.BlockedDestinationException {
+                checkedHosts.add(uri.getHost());
+                super.checkUrl(uri);
+            }
+        };
+        PageAnalyzer analyzer = new PageAnalyzer(url -> new byte[0], recordingPolicy);
+
+        // "е" cyrillique ; ".invalid" ne se résout jamais
+        DomainPageDTO result = analyzer.analyzePage("\u0435xample.invalid");
+
+        assertEquals(0, result.getHttpCode());
+        assertEquals("\u0435xample.invalid", result.getDomain());
+        assertFalse(checkedHosts.isEmpty());
+        assertEquals(java.net.IDN.toASCII("\u0435xample.invalid"), checkedHosts.get(0));
+    }
 }
