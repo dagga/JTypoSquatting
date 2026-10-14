@@ -131,7 +131,7 @@
       "Unreachable": "Unreachable",
       "Active": "Active",
       "Dead": "Inactive",
-      "Testing...": "Testing…",
+      "Testing": "Testing…",
       "Unknown": "Unknown"
     },
     "tlsStatus": {

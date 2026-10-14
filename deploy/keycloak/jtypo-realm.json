@@ -24,6 +24,7 @@
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/login/oauth2/code/oidc",
+        "http://localhost:3001/login/oauth2/code/oidc",
         "http://localhost:8081/login/oauth2/code/oidc",
         "http://localhost/login/oauth2/code/oidc"
       ],
@@ -32,7 +33,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:8081/*##http://localhost/*"
+        "post.logout.redirect.uris": "http://localhost:3000/*##http://localhost:3001/*##http://localhost:8081/*##http://localhost/*"
       }
     }
   ],
