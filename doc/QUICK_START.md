@@ -80,8 +80,11 @@ java -jar JTypoSquatting.jar
 # Build complet
 ./gradlew clean build :frontend:copyFatJar
 
-# Tests unitaires (sans tests réseau)
-./gradlew test -Pexclude.network.tests=true
+# Tests (sans accès Internet ; MySQL et S3 via Testcontainers si Docker/Podman est disponible)
+./gradlew test
+
+# Avec les tests qui contactent de vrais sites
+./gradlew test -Dinclude.network=true
 ```
 
 ---
