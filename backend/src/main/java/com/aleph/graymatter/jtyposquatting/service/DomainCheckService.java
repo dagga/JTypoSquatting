@@ -29,7 +29,21 @@ public class DomainCheckService {
         this.outboundChecks = new Semaphore(maxConcurrentChecks, true);
     }
 
+    /**
+     * Checks a domain and stores the page in the legacy table of the desktop application.
+     */
     public DomainResultDTO checkDomain(String domain) {
+        return check(domain, true);
+    }
+
+    /**
+     * Checks a domain without storing anything (web scans persist their own results).
+     */
+    public DomainResultDTO analyze(String domain) {
+        return check(domain, false);
+    }
+
+    private DomainResultDTO check(String domain, boolean saveLegacy) {
         try {
             outboundChecks.acquire();
         } catch (InterruptedException e) {
@@ -41,11 +55,12 @@ public class DomainCheckService {
 
             // If we got an HTTP code > 0, the domain is "Alive"
             if (pageData != null && pageData.getHttpCode() > 0) {
-                // Save to database
-                try {
-                    databaseService.save(pageData);
-                } catch (Exception e) {
-                    logger.warn("Failed to save {}: {}", domain, e.getMessage());
+                if (saveLegacy) {
+                    try {
+                        databaseService.save(pageData);
+                    } catch (Exception e) {
+                        logger.warn("Failed to save {}: {}", domain, e.getMessage());
+                    }
                 }
 
                 // Truncate long fields for DTO
