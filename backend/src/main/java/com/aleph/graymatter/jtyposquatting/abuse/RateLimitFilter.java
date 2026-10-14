@@ -3,6 +3,8 @@ package com.aleph.graymatter.jtyposquatting.abuse;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.github.bucket4j.Bandwidth;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
 import jakarta.servlet.FilterChain;
@@ -28,13 +30,15 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitFilter extends OncePerRequestFilter {
 
     private final int requestsPerMinute;
+    private final Counter rejections;
     private final Cache<String, Bucket> buckets = CacheBuilder.newBuilder()
             .maximumSize(100_000)
             .expireAfterAccess(10, TimeUnit.MINUTES)
             .build();
 
-    public RateLimitFilter(int requestsPerMinute) {
+    public RateLimitFilter(int requestsPerMinute, MeterRegistry meters) {
         this.requestsPerMinute = requestsPerMinute;
+        this.rejections = meters.counter("jtypo.quota.rejections", "type", "rate");
     }
 
     @Override
@@ -51,6 +55,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
             return;
         }
+        rejections.increment();
         long retryAfterSeconds = Math.max(1, TimeUnit.NANOSECONDS.toSeconds(probe.getNanosToWaitForRefill()));
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setHeader("Retry-After", String.valueOf(retryAfterSeconds));

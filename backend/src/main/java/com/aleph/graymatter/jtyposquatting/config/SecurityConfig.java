@@ -1,6 +1,7 @@
 package com.aleph.graymatter.jtyposquatting.config;
 
 import com.aleph.graymatter.jtyposquatting.abuse.RateLimitFilter;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,7 +41,6 @@ import java.util.function.Supplier;
  */
 @Configuration
 @EnableWebSecurity
-// Worker instances have no web server
 @ConditionalOnWebApplication
 public class SecurityConfig {
 
@@ -61,13 +61,16 @@ public class SecurityConfig {
                                                 ClientRegistrationRepository clientRegistrations,
                                                 @Value("${jtypo.security.post-login-url:/app}") String postLoginUrl,
                                                 @Value("${jtypo.security.post-logout-url:{baseUrl}/}") String postLogoutUrl,
-                                                @Value("${jtypo.rate-limit.requests-per-minute:120}") int requestsPerMinute)
+                                                @Value("${jtypo.rate-limit.requests-per-minute:120}") int requestsPerMinute,
+                                                MeterRegistry meters)
             throws Exception {
         JsonLogoutSuccessHandler logoutSuccessHandler = new JsonLogoutSuccessHandler(clientRegistrations, postLogoutUrl);
 
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/error", "/login/**", "/oauth2/**", "/actuator/health").permitAll()
+                        .requestMatchers("/error", "/login/**", "/oauth2/**").permitAll()
+                        // Monitoring: management port, never routed by the reverse proxy
+                        .requestMatchers("/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         .anyRequest().permitAll())
                 // Single provider: browsers go straight to it instead of a generated login page
@@ -80,7 +83,7 @@ public class SecurityConfig {
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                         PathPatternRequestMatcher.withDefaults().matcher("/api/**")))
                 // After the session is restored, so that limits apply per user (per IP for anonymous calls)
-                .addFilterAfter(new RateLimitFilter(requestsPerMinute), SecurityContextHolderFilter.class)
+                .addFilterAfter(new RateLimitFilter(requestsPerMinute, meters), SecurityContextHolderFilter.class)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))

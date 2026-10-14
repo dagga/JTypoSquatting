@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.storage;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.aleph.graymatter.jtyposquatting.scan.ScanResultRepository;
 import com.aleph.graymatter.jtyposquatting.scan.ScanUser;
 import org.springframework.http.CacheControl;
@@ -17,6 +18,8 @@ import java.time.Duration;
  * Serves screenshots to the users whose scans contain them.
  */
 @RestController
+// Disabled on worker instances, whose HTTP server only exposes monitoring endpoints
+@ConditionalOnProperty(name = "jtypo.api.enabled", havingValue = "true", matchIfMissing = true)
 public class ScreenshotController {
 
     private final ScreenshotStore store;

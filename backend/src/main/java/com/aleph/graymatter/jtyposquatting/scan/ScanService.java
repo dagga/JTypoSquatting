@@ -4,6 +4,7 @@ import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.abuse.QuotaExceededException;
 import com.aleph.graymatter.jtyposquatting.net.DomainName;
 import com.aleph.graymatter.jtyposquatting.persistence.DomainKeys;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,12 +29,14 @@ public class ScanService {
     private final int maxConcurrentScans;
     private final int scansPerDay;
     private final Clock clock;
+    private final MeterRegistry meters;
 
-    public ScanService(ScanRepository scans, UserRepository users,
+    public ScanService(ScanRepository scans, UserRepository users, MeterRegistry meters,
                        @Value("${jtypo.quota.max-concurrent-scans:2}") int maxConcurrentScans,
                        @Value("${jtypo.quota.scans-per-day:50}") int scansPerDay) {
         this.scans = scans;
         this.users = users;
+        this.meters = meters;
         this.maxConcurrentScans = maxConcurrentScans;
         this.scansPerDay = scansPerDay;
         this.clock = Clock.systemUTC();
@@ -52,11 +55,13 @@ public class ScanService {
 
         Instant now = clock.instant();
         if (scans.countActiveByUser(user.id()) >= maxConcurrentScans) {
+            meters.counter("jtypo.quota.rejections", "type", "concurrent").increment();
             throw new QuotaExceededException(
                     "Too many simultaneous scans (maximum " + maxConcurrentScans + ")", Duration.ofSeconds(30));
         }
         Instant windowStart = now.minus(QUOTA_WINDOW);
         if (scans.countCreatedSince(user.id(), windowStart) >= scansPerDay) {
+            meters.counter("jtypo.quota.rejections", "type", "daily").increment();
             Duration retryAfter = scans.oldestCreatedSince(user.id(), windowStart)
                     .map(oldest -> Duration.between(now, oldest.plus(QUOTA_WINDOW)))
                     .orElse(QUOTA_WINDOW);
@@ -66,6 +71,7 @@ public class ScanService {
         Scan scan = new Scan(UUID.randomUUID().toString(), user.id(), key, ScanStatus.PENDING, forceRefresh,
                 0, 0, now, null, null, null);
         scans.insert(scan);
+        meters.counter("jtypo.scans.submitted").increment();
         return scan;
     }
 

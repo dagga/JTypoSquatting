@@ -351,6 +351,27 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --
   (no user namespaces): the container is the sandbox.
 - Terminate TLS in front of nginx (or add a 443 server) and set `X-Forwarded-Proto` accordingly.
 
+### Monitoring
+
+API instances and workers expose on port **8082** (never routed by nginx) `/actuator/health` (with
+`/liveness` and `/readiness` probes) and `/actuator/prometheus`. Logs are written as JSON (ECS format) on
+the standard output of the containers, ready for a log collector.
+
+| Metric | Description |
+|--------|-------------|
+| `jtypo_scans_submitted_total` | Scans created |
+| `jtypo_scans_finished_total{status}` | Scans completed, cancelled or failed |
+| `jtypo_scan_duration_seconds{status}` | Processing time of a scan |
+| `jtypo_scans_queue{status}` | Scans waiting (`PENDING`) or in progress (`RUNNING`), from the database (aggregate with `max`) |
+| `jtypo_checks_total{source}` | Domain checks served by the cache or done on the network |
+| `jtypo_check_duration_seconds` | Duration of a network check |
+| `jtypo_screenshots_total{outcome}` | Screenshots taken, failed or blocked by the anti-SSRF policy |
+| `jtypo_quota_rejections_total{type}` | Requests refused: rate limit, simultaneous scans, daily quota |
+| `jtypo_sse_streams` | Open live streams |
+
+`deploy/prometheus/` contains a scrape configuration and alert rules: instance down, scans waiting with
+no worker processing them, queue backlog, scan, API and screenshot failure rates, rate-limit spike.
+
 ### Continuous integration and delivery
 
 The `Build and Release` workflow runs the backend tests (with Testcontainers on the Docker engine of the

@@ -1,37 +1,38 @@
 package com.aleph.graymatter.jtyposquatting.config;
 
 import com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication;
+import com.aleph.graymatter.jtyposquatting.controller.UserController;
+import com.aleph.graymatter.jtyposquatting.scan.ScanController;
 import com.aleph.graymatter.jtyposquatting.scan.ScanWorker;
+import com.aleph.graymatter.jtyposquatting.storage.ScreenshotController;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.builder.SpringApplicationBuilder;
-import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.security.web.SecurityFilterChain;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Profils de déploiement : instances API (sans worker) et workers (sans serveur web), même artefact.
+ * Profils de déploiement : instances API (sans worker) et workers (sans API), même artefact.
  */
 class DeploymentProfilesTest {
 
     private static ConfigurableApplicationContext start(String profile) {
         return new SpringApplicationBuilder(JTypoSquattingApplication.class)
                 .profiles("test", profile)
-                .properties("server.port=0", "jtypo.worker.poll-interval-ms=3600000")
+                .properties("server.port=0", "management.server.port=0", "jtypo.worker.poll-interval-ms=3600000")
                 .run();
     }
 
     @Test
-    @DisplayName("Profil worker : traite les analyses, sans serveur web ni sécurité HTTP")
+    @DisplayName("Profil worker : traite les analyses ; son serveur HTTP n'expose que la supervision")
     void testWorkerProfile() {
         try (ConfigurableApplicationContext context = start("worker")) {
-            assertFalse(context instanceof WebServerApplicationContext);
             assertEquals(1, context.getBeansOfType(ScanWorker.class).size());
-            assertTrue(context.getBeansOfType(SecurityFilterChain.class).isEmpty());
-            // Only daemon threads remain without a web server: the JVM would exit right after startup
-            assertEquals("true", context.getEnvironment().getProperty("spring.main.keep-alive"));
+            assertTrue(context.getBeansOfType(ScanController.class).isEmpty());
+            assertTrue(context.getBeansOfType(UserController.class).isEmpty());
+            assertTrue(context.getBeansOfType(ScreenshotController.class).isEmpty());
         }
     }
 
@@ -39,9 +40,9 @@ class DeploymentProfilesTest {
     @DisplayName("Profil api : sert l'API, sans worker")
     void testApiProfile() {
         try (ConfigurableApplicationContext context = start("api")) {
-            assertInstanceOf(WebServerApplicationContext.class, context);
             assertTrue(context.getBeansOfType(ScanWorker.class).isEmpty());
             assertFalse(context.getBeansOfType(SecurityFilterChain.class).isEmpty());
+            assertEquals(1, context.getBeansOfType(ScanController.class).size());
         }
     }
 }

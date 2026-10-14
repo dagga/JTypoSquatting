@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.scan;
 
 import com.aleph.graymatter.jtyposquatting.JTypoSquatting;
 import com.aleph.graymatter.jtyposquatting.persistence.DomainKeys;
+import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +49,7 @@ public class ScanWorker {
     private final Duration staleAfter;
     private final Clock clock = Clock.systemUTC();
     private final String workerId;
+    private final MeterRegistry meters;
 
     private final Semaphore scanSlots;
     private final ExecutorService scanExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -55,7 +57,7 @@ public class ScanWorker {
             Thread.ofPlatform().name("scan-heartbeat").daemon().factory());
     private volatile boolean stopping;
 
-    public ScanWorker(ScanRepository scans, ScanResultRepository results, DomainChecker domainChecker,
+    public ScanWorker(ScanRepository scans, ScanResultRepository results, DomainChecker domainChecker, MeterRegistry meters,
                       @Value("${jtypo.worker.max-concurrent-scans:4}") int maxConcurrentScans,
                       @Value("${jtypo.quota.max-domains-per-scan:3000}") int maxDomainsPerScan,
                       @Value("${jtypo.worker.heartbeat-interval-ms:5000}") long heartbeatIntervalMillis,
@@ -63,6 +65,7 @@ public class ScanWorker {
         this.scans = scans;
         this.results = results;
         this.domainChecker = domainChecker;
+        this.meters = meters;
         this.maxDomainsPerScan = maxDomainsPerScan;
         this.heartbeatInterval = Duration.ofMillis(heartbeatIntervalMillis);
         this.staleAfter = Duration.ofMillis(staleAfterMillis);
@@ -105,6 +108,7 @@ public class ScanWorker {
         if (scan == null) {
             return;
         }
+        long startedAt = System.nanoTime();
         AtomicInteger checked = new AtomicInteger(results.countByScan(scanId));
         AtomicBoolean stopped = new AtomicBoolean();
         ExecutorService checks = Executors.newVirtualThreadPerTaskExecutor();
@@ -149,10 +153,14 @@ public class ScanWorker {
             if (!stopped.get()) {
                 scans.finish(scanId, workerId, ScanStatus.COMPLETED, checked.get(), null, clock.instant());
                 logger.info("Scan {} completed: {} domains checked", scanId, checked.get());
+                recordFinished(ScanStatus.COMPLETED, startedAt);
+            } else {
+                recordFinished(ScanStatus.CANCELLED, startedAt);
             }
         } catch (Exception e) {
             logger.error("Scan {} failed", scanId, e);
             scans.finish(scanId, workerId, ScanStatus.FAILED, checked.get(), truncate(e.getMessage()), clock.instant());
+            recordFinished(ScanStatus.FAILED, startedAt);
         } finally {
             heartbeat.cancel(false);
             checks.shutdownNow();
@@ -176,6 +184,11 @@ public class ScanWorker {
             domains = domains.subList(0, maxDomainsPerScan);
         }
         return domains;
+    }
+
+    private void recordFinished(ScanStatus status, long startedAt) {
+        meters.counter("jtypo.scans.finished", "status", status.name()).increment();
+        meters.timer("jtypo.scan.duration", "status", status.name()).record(System.nanoTime() - startedAt, TimeUnit.NANOSECONDS);
     }
 
     @PreDestroy

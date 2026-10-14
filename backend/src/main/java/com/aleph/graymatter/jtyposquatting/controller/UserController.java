@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.controller;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
@@ -14,6 +15,8 @@ import java.util.Map;
  * Current user information for the web frontend.
  */
 @RestController
+// Disabled on worker instances, whose HTTP server only exposes monitoring endpoints
+@ConditionalOnProperty(name = "jtypo.api.enabled", havingValue = "true", matchIfMissing = true)
 @RequestMapping("/api")
 public class UserController {
 

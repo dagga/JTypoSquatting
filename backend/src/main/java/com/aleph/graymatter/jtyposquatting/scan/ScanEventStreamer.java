@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.scan;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Streams the results of a scan as Server-Sent Events.
@@ -37,8 +39,9 @@ public class ScanEventStreamer {
     private final Duration keepAliveInterval;
     private final Duration maxStreamDuration;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    private final AtomicInteger activeStreams = new AtomicInteger();
 
-    public ScanEventStreamer(ScanRepository scans, ScanResultRepository results,
+    public ScanEventStreamer(ScanRepository scans, ScanResultRepository results, MeterRegistry meters,
                              @Value("${jtypo.sse.poll-interval-ms:500}") long pollIntervalMillis,
                              @Value("${jtypo.sse.keep-alive-ms:15000}") long keepAliveMillis,
                              @Value("${jtypo.sse.max-duration-ms:1800000}") long maxDurationMillis) {
@@ -47,12 +50,20 @@ public class ScanEventStreamer {
         this.pollInterval = Duration.ofMillis(pollIntervalMillis);
         this.keepAliveInterval = Duration.ofMillis(keepAliveMillis);
         this.maxStreamDuration = Duration.ofMillis(maxDurationMillis);
+        meters.gauge("jtypo.sse.streams", activeStreams);
     }
 
     public SseEmitter stream(String scanId, long lastEventId) {
         // The client reconnects by itself (with Last-Event-ID) when a long stream is closed
         SseEmitter emitter = new SseEmitter(maxStreamDuration.toMillis() + 60_000);
-        executor.submit(() -> pump(scanId, lastEventId, emitter));
+        executor.submit(() -> {
+            activeStreams.incrementAndGet();
+            try {
+                pump(scanId, lastEventId, emitter);
+            } finally {
+                activeStreams.decrementAndGet();
+            }
+        });
         return emitter;
     }
 
