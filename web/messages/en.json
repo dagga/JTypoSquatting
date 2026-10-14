@@ -92,7 +92,8 @@
       "generic": "Something went wrong. Please try again later.",
       "forbidden": "This scan does not belong to you.",
       "notFound": "Scan not found."
-    }
+    },
+    "loginFailed": "Login failed. Please try again; if the problem persists, contact us."
   },
   "Scan": {
     "back": "All scans",
