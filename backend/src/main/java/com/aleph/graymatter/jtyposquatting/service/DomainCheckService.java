@@ -4,10 +4,14 @@ import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class DomainCheckService {
+
+    private static final Logger logger = LoggerFactory.getLogger(DomainCheckService.class);
 
     private final DatabaseService databaseService;
     private final PageAnalyzer pageAnalyzer;
@@ -27,7 +31,7 @@ public class DomainCheckService {
                 try {
                     databaseService.save(pageData);
                 } catch (Exception e) {
-                    System.err.println("[DomainCheck] Failed to save " + domain + ": " + e.getMessage());
+                    logger.warn("Failed to save {}: {}", domain, e.getMessage());
                 }
 
                 // Truncate long fields for DTO
@@ -46,7 +50,7 @@ public class DomainCheckService {
                 DomainStatus domainStatus = (pageData.getHttpCode() == 200) ? DomainStatus.SUSPICIOUS : DomainStatus.SAFE;
 
                 byte[] screenshot = pageData.getScreenshot();
-                System.out.println("[DomainCheck] Sending result for " + domain + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
+                logger.debug("Sending result for {} with screenshot: {} bytes", domain, screenshot != null ? screenshot.length : 0);
 
                 return new DomainResultDTO(
                         domain,
@@ -74,7 +78,7 @@ public class DomainCheckService {
                 );
             }
         } catch (Exception e) {
-            System.err.println("[DomainCheck] Error analyzing " + domain + ": " + e.getMessage());
+            logger.warn("Error analyzing {}: {}", domain, e.getMessage());
             // Treat exceptions as "Unreachable"
             return new DomainResultDTO(
                     domain,
