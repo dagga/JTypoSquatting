@@ -102,6 +102,7 @@ public class PlaywrightScreenshotService implements ScreenshotService {
     private byte[] capture(Browser browser, String url) {
         try (BrowserContext context = browser.newContext(new Browser.NewContextOptions()
                 .setViewportSize(1280, 800)
+                .setUserAgent(outboundPolicy.getUserAgent())
                 .setAcceptDownloads(false)
                 .setServiceWorkers(ServiceWorkerPolicy.BLOCK))) {
             context.setDefaultTimeout(timeoutMillis);

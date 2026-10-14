@@ -15,7 +15,9 @@ public class CombinedLauncher {
         new Thread(() -> {
             new SpringApplicationBuilder(JTypoSquattingApplication.class)
                     // Desktop mode: API reachable from this machine only, no login
-                    .properties("server.port=8081", "server.address=127.0.0.1", "jtypo.security.mode=local")
+                    .properties("server.port=8081", "server.address=127.0.0.1", "jtypo.security.mode=local",
+                            // Single trusted user: public-service quotas do not apply
+                            "jtypo.quota.scans-per-day=1000000", "jtypo.quota.max-concurrent-scans=10")
                     .run(args);
         }).start();
         

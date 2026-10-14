@@ -78,6 +78,9 @@ project(':backend') {
         implementation 'org.springframework.boot:spring-boot-starter-security:3.5.0'
         implementation 'org.springframework.boot:spring-boot-starter-oauth2-client:3.5.0'
 
+        // Rate limiting
+        implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
+
         // H2 embedded database (moved from shared)
         implementation 'com.h2database:h2:2.2.224'
         implementation 'org.springframework.boot:spring-boot-starter-jdbc:3.5.0'

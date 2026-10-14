@@ -439,8 +439,29 @@ Extended DTO for detailed domain analysis.
 |------|---------|---------------|
 | 200 | OK | Successful request |
 | 400 | Bad Request | Invalid parameters |
+| 401 | Unauthorized | No valid session (web mode) |
+| 403 | Forbidden | Missing CSRF token |
 | 404 | Not Found | Domain not in cache |
+| 429 | Too Many Requests | Rate limit or scan quota exceeded; see `Retry-After` |
 | 500 | Internal Server Error | Server error |
+
+#### Rate limiting and quotas
+
+Limits apply per user (per client IP for anonymous calls). Counters are kept in memory, per instance.
+A 429 response carries a `Retry-After` header (seconds) and a JSON body `{"error": "..."}`, also on the SSE endpoint.
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `jtypo.rate-limit.requests-per-minute` | 120 | API requests per minute |
+| `jtypo.quota.max-concurrent-scans` | 2 | Simultaneous scans per user |
+| `jtypo.quota.scans-per-day` | 50 | Scans per user over a sliding 24-hour window |
+| `jtypo.quota.max-domains-per-scan` | 3000 | Generated domains checked per scan (extra ones are dropped) |
+| `jtypo.analysis.max-concurrent-checks` | 64 | Outbound checks running at the same time on the instance |
+| `jtypo.outbound.user-agent` | `Mozilla/5.0 (compatible; JTypoSquatting/2.0)` | User-Agent of the HTTP client and the browser |
+
+The desktop launcher raises the scan quotas (single trusted user).
+To protect sign-up against bots, enable reCAPTCHA in the Keycloak registration flow
+(*Authentication → registration → reCAPTCHA*, with the site keys of your domain).
 
 ### 6.2 Error Response Format
 

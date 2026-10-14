@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.security;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -51,13 +52,28 @@ public class OutboundPolicy {
             Cidr.of("ff00::/8")             // multicast
     );
 
+    public static final String DEFAULT_USER_AGENT = "Mozilla/5.0 (compatible; JTypoSquatting/2.0)";
+
     private final boolean allowPrivateAddresses;
     private final Set<Integer> allowedPorts;
+    private final String userAgent;
 
+    @Autowired
     public OutboundPolicy(@Value("${jtypo.outbound.allow-private-addresses:false}") boolean allowPrivateAddresses,
-                          @Value("${jtypo.outbound.allowed-ports:80,443}") Set<Integer> allowedPorts) {
+                          @Value("${jtypo.outbound.allowed-ports:80,443}") Set<Integer> allowedPorts,
+                          @Value("${jtypo.outbound.user-agent:" + DEFAULT_USER_AGENT + "}") String userAgent) {
         this.allowPrivateAddresses = allowPrivateAddresses;
         this.allowedPorts = Set.copyOf(allowedPorts);
+        this.userAgent = userAgent;
+    }
+
+    public OutboundPolicy(boolean allowPrivateAddresses, Set<Integer> allowedPorts) {
+        this(allowPrivateAddresses, allowedPorts, DEFAULT_USER_AGENT);
+    }
+
+    /** User-Agent sent by the HTTP client and the browser, so that analysed sites can identify the service. */
+    public String getUserAgent() {
+        return userAgent;
     }
 
     /** Policy for tests against local mock servers: any address, any port. */

@@ -6,7 +6,10 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Semaphore;
 
 @Service
 public class DomainCheckService {
@@ -16,12 +19,23 @@ public class DomainCheckService {
     private final DatabaseService databaseService;
     private final PageAnalyzer pageAnalyzer;
 
-    public DomainCheckService(DatabaseService databaseService, PageAnalyzer pageAnalyzer) {
+    // Caps outbound checks for the whole instance: a scan submits thousands of domains at once
+    private final Semaphore outboundChecks;
+
+    public DomainCheckService(DatabaseService databaseService, PageAnalyzer pageAnalyzer,
+                              @Value("${jtypo.analysis.max-concurrent-checks:64}") int maxConcurrentChecks) {
         this.databaseService = databaseService;
         this.pageAnalyzer = pageAnalyzer;
+        this.outboundChecks = new Semaphore(maxConcurrentChecks, true);
     }
 
     public DomainResultDTO checkDomain(String domain) {
+        try {
+            outboundChecks.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new DomainResultDTO(domain, DomainStatus.UNREACHABLE, "", "", "Cancelled", 0, null, "", null);
+        }
         try {
             DomainPageDTO pageData = pageAnalyzer.analyzePage(domain);
 
@@ -93,6 +107,8 @@ public class DomainCheckService {
                     "",
                     null
             );
+        } finally {
+            outboundChecks.release();
         }
     }
 }

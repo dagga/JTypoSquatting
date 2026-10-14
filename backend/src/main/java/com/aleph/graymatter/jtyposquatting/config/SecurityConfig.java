@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.config;
 
+import com.aleph.graymatter.jtyposquatting.abuse.RateLimitFilter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,6 +14,7 @@ import org.springframework.security.oauth2.client.oidc.web.logout.OidcClientInit
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.security.web.header.writers.StaticHeadersWriter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -56,7 +58,8 @@ public class SecurityConfig {
     SecurityFilterChain oidcSecurityFilterChain(HttpSecurity http,
                                                 ClientRegistrationRepository clientRegistrations,
                                                 @Value("${jtypo.security.post-login-url:/}") String postLoginUrl,
-                                                @Value("${jtypo.security.post-logout-url:{baseUrl}/}") String postLogoutUrl)
+                                                @Value("${jtypo.security.post-logout-url:{baseUrl}/}") String postLogoutUrl,
+                                                @Value("${jtypo.rate-limit.requests-per-minute:120}") int requestsPerMinute)
             throws Exception {
         OidcClientInitiatedLogoutSuccessHandler logoutSuccessHandler = new OidcClientInitiatedLogoutSuccessHandler(clientRegistrations);
         logoutSuccessHandler.setPostLogoutRedirectUri(postLogoutUrl);
@@ -75,6 +78,8 @@ public class SecurityConfig {
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(
                         new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED),
                         PathPatternRequestMatcher.withDefaults().matcher("/api/**")))
+                // After the session is restored, so that limits apply per user (per IP for anonymous calls)
+                .addFilterAfter(new RateLimitFilter(requestsPerMinute), SecurityContextHolderFilter.class)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                         .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))

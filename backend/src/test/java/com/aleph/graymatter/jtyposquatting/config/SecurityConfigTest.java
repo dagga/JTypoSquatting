@@ -89,6 +89,47 @@ class SecurityConfigTest {
     }
 
     @Nested
+    @SpringBootTest(properties = {"jtypo.rate-limit.requests-per-minute=3", "jtypo.quota.scans-per-day=1"})
+    @AutoConfigureMockMvc
+    @ActiveProfiles("test")
+    class AbuseProtection {
+
+        @Autowired
+        private MockMvc mvc;
+
+        @Test
+        @DisplayName("Au-delà du débit autorisé, l'API répond 429 avec Retry-After")
+        void testRateLimit() throws Exception {
+            for (int i = 0; i < 3; i++) {
+                mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("rate-user"))))
+                        .andExpect(status().isOk());
+            }
+            mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("rate-user"))))
+                    .andExpect(status().isTooManyRequests())
+                    .andExpect(header().exists("Retry-After"));
+            // Le compteur est propre à chaque utilisateur
+            mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("other-user"))))
+                    .andExpect(status().isOk());
+        }
+
+        @Test
+        @DisplayName("Le quota d'analyses répond 429, y compris sur le flux SSE")
+        void testScanQuota() throws Exception {
+            // Domaine invalide : l'analyse échoue immédiatement, sans requête réseau
+            mvc.perform(get("/api/generate-and-check").param("domain", "invalid")
+                            .accept("text/event-stream")
+                            .with(oidcLogin().idToken(t -> t.subject("quota-user"))))
+                    .andExpect(status().isOk());
+            mvc.perform(get("/api/generate-and-check").param("domain", "invalid")
+                            .accept("text/event-stream")
+                            .with(oidcLogin().idToken(t -> t.subject("quota-user"))))
+                    .andExpect(status().isTooManyRequests())
+                    .andExpect(header().exists("Retry-After"))
+                    .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("Daily")));
+        }
+    }
+
+    @Nested
     @SpringBootTest(properties = "jtypo.security.mode=local")
     @AutoConfigureMockMvc
     @ActiveProfiles("test")
