@@ -25,7 +25,9 @@ const BADGE = "inline-block rounded px-2 py-0.5 text-xs font-medium whitespace-n
 
 export function DomainStatusBadge({ status }: { status: DomainStatus }) {
   const t = useTranslations("Scan.domainStatus");
-  return <span className={`${BADGE} ${DOMAIN_STATUS_STYLE[status]}`}>{t(status)}</span>;
+  // Message keys cannot contain dots
+  const key = status === "Testing..." ? "Testing" : status;
+  return <span className={`${BADGE} ${DOMAIN_STATUS_STYLE[status]}`}>{t(key)}</span>;
 }
 
 export function ScanStatusBadge({ status }: { status: ScanStatus }) {
