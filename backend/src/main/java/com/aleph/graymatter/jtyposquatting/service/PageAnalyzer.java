@@ -34,6 +34,7 @@ import javax.net.ssl.SSLPeerUnverifiedException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ConnectException;
+import java.net.IDN;
 import java.net.URI;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -117,7 +118,8 @@ public class PageAnalyzer {
         DomainPageDTO data = new DomainPageDTO(domain);
 
         try {
-            URI target = URI.create(domain.startsWith("http") ? domain : "https://" + domain);
+            // Internationalised (homoglyph) domains are resolved in their ASCII/punycode form
+            URI target = URI.create(domain.startsWith("http") ? domain : "https://" + IDN.toASCII(domain, IDN.ALLOW_UNASSIGNED));
             FetchedPage page = fetchWithFallback(target, data);
 
             if (Thread.currentThread().isInterrupted()) {
@@ -187,8 +189,9 @@ public class PageAnalyzer {
         } catch (BlockedDestinationException e) {
             logger.warn("Blocked outbound connection for {}: {}", domain, e.getMessage());
             data.setHttpCode(0);
-        } catch (java.net.UnknownHostException | java.io.InterruptedIOException e) {
-            // Unknown host, connect or read timeout
+        } catch (java.net.UnknownHostException | java.io.InterruptedIOException | java.net.SocketException e) {
+            // Unknown host, connection refused, no route, connect or read timeout: the domain is unreachable
+            logger.debug("{} unreachable: {}", domain, e.getMessage());
             data.setHttpCode(0);
         } catch (Exception e) {
             logger.error("Error analyzing page {}: {}", domain, e.getMessage());
