@@ -67,7 +67,7 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 - ✅ JUnit 5 unit and functional tests
 - ✅ Integration tests with Spring Boot
 - ✅ GitHub Actions CI/CD pipeline
-- ✅ Xvfb for headless screenshot testing
+- ✅ Headless Chromium (Playwright) for screenshot testing, no display required
 - ✅ Smart test modes (CI-strict / local-tolerant)
 
 ### Performance
@@ -107,10 +107,8 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 # Run tests
 ./gradlew test
 
-# Run tests with Xvfb (for screenshot testing)
-Xvfb :99 -screen 0 1280x1024x24 &
-export DISPLAY=:99
-./gradlew test
+# Install headless Chromium once (required for screenshots)
+./gradlew :backend:installPlaywrightBrowsers
 
 # Native installer (requires jpackage)
 ./gradlew :frontend:packageApp
@@ -134,8 +132,8 @@ JTypoSquatting includes comprehensive test coverage:
 
 ### Test Modes
 
-- **CI Mode (GitHub Actions)**: Screenshots required (Xvfb provided)
-- **Local Mode**: Screenshots optional (tests pass without display)
+- **CI Mode (GitHub Actions)**: Screenshots required (Chromium installed by the workflow)
+- **Local Mode**: Screenshots optional (tests pass when Chromium is not installed)
 
 ### Running Tests
 
@@ -143,10 +141,8 @@ JTypoSquatting includes comprehensive test coverage:
 # Default (tolerant mode)
 ./gradlew test
 
-# With Xvfb (strict screenshot testing)
-sudo apt install xvfb
-Xvfb :99 -screen 0 1280x1024x24 &
-export DISPLAY=:99
+# With screenshots (installs headless Chromium once)
+./gradlew :backend:installPlaywrightBrowsers
 ./gradlew test
 ```
 

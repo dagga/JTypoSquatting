@@ -559,12 +559,12 @@ java -Xmx2G -jar JTypoSquatting.jar
 
 #### Issue: "Screenshots not displaying"
 
-**Cause:** JavaFX runtime issue
+**Cause:** headless Chromium is not installed or cannot start
 
 **Solution:**
-1. Ensure JDK 21+ with JavaFX
+1. Install Chromium once: `./gradlew :backend:installPlaywrightBrowsers`
 2. Check backend logs for screenshot errors
-3. Verify display server is running
+3. If the Chromium sandbox cannot start, set `jtypo.screenshot.chromium-sandbox=false` only inside an isolated container
 
 #### Issue: Build fails with "Virtual Threads not supported"
 

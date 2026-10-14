@@ -18,7 +18,7 @@ class PageAnalyzerUnitTest {
 
     @BeforeEach
     void setUp() {
-        // Mock ScreenshotService to avoid JavaFX initialization
+        // Mock ScreenshotService to avoid launching a browser
         ScreenshotService mockScreenshotService = url -> new byte[0];
         pageAnalyzer = new PageAnalyzer(mockScreenshotService, OutboundPolicy.permissive());
     }

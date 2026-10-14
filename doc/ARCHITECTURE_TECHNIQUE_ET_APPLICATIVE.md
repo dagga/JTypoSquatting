@@ -30,7 +30,7 @@ Ce document constitue la référence officielle de l'architecture technique et a
 JTypoSquatting est conçu selon un modèle **Client-Serveur découplé** s'exécutant au sein d'un environnement local :
 - **Frontend** : Application riche de bureau en **Java Swing** assurant l'interface utilisateur, la restitution tabulaire, le tri par priorité de risque, l'affichage des miniatures web et la consultation des logs en direct.
 - **Backend** : Service applicatif **Spring Boot 3.5.0** hébergé sur le conteneur embarqué **Jetty**, exposant des endpoints REST et un flux d'événements temps réel (**Server-Sent Events - SSE**). Il exploite les **Virtual Threads** (Java 21 Project Loom) pour interroger massivement les cibles distantes.
-- **Moteur d'Analyse et Rendu** : Un composant d'évaluation HTTP couplé à **JavaFX WebView** pour exécuter les scripts des pages cibles et réaliser une capture d'écran graphique des sites suspects.
+- **Moteur d'Analyse et Rendu** : Un composant d'évaluation HTTP couplé à **Chromium headless (Playwright)** pour exécuter les scripts des pages cibles et réaliser une capture d'écran graphique des sites suspects.
 - **Persistance Locale** : Base de données relationnelle embarquée **H2** stockant l'historique complet, les en-têtes HTTP, les métadonnées SEO/OpenGraph et les images capturées sous forme de BLOB.
 
 ---
@@ -74,7 +74,7 @@ JTypoSquatting/
   - `Misspell` : Injection d'erreurs orthographiques d'après une base de données de fautes fréquentes.
   - `TLD` : Remplacement du TLD d'origine par les extensions majeures répertoriées dans `TLD.txt`.
 - **`DomainCheckService`** : Service intermédiaire gérant le cycle de contrôle d'un domaine individuel et la persistance en base.
-- **`PageAnalyzer`** : Moteur d'analyse HTTP, extraction JSoup, détection de langue Lingua, et capture d'écran JavaFX WebView.
+- **`PageAnalyzer`** : Moteur d'analyse HTTP, extraction JSoup, détection de langue Lingua, capture d'écran déléguée à `PlaywrightScreenshotService` (Chromium headless).
 - **`DatabaseService`** : Couche d'accès aux données (DAO) s'appuyant sur JDBC H2.
 
 ### 3.3 Module Frontend (`:frontend`)
@@ -107,7 +107,7 @@ JTypoSquatting/
 |  |                  |                  |  |  +------------+-------------+  |  |
 |  |  +---------------v---------------+  |  |               |                |  |
 |  |  |   JTypoSquattingRestClient    |  |  |  +------------v-------------+  |  |
-|  |  +---------------+---------------+  |  |  |  JavaFX WebView + Xvfb   |  |  |
+|  |  +---------------+---------------+  |  |  |  Chromium headless       |  |  |
 |  +------------------|------------------+  |  +------------+-------------+  |  |
 |                     | HTTP / SSE                          |                |  |
 |                     +------------------------------------>|                |  |
@@ -302,7 +302,6 @@ classDiagram
 
     class PageAnalyzer {
         -LanguageDetector LANGUAGE_DETECTOR
-        -boolean javafxInitialized
         +analyzePage(String) DomainPageDTO
         -readHtml(HttpURLConnection) String
         -captureScreenshot(URL) byte[]
@@ -388,7 +387,7 @@ sequenceDiagram
             Target-->>Analyzer: HTTP 200 + HTML
             Analyzer->>Analyzer: JSoup parse (titre, meta) & Lingua (langue)
             opt Condition Capture (text >= 5 chars)
-                Analyzer->>Analyzer: JavaFX WebView snapshot -> thumbnail PNG
+                Analyzer->>Analyzer: Chromium headless (Playwright) -> PNG
             end
             Analyzer-->>CheckSvc: DomainPageDTO complet
             CheckSvc->>DB: save(DomainPageDTO)
@@ -452,7 +451,7 @@ flowchart TD
         CodeBranch -- Code == 200 --> CheckHTML[Analyse JSoup HTML et texte]
         CheckHTML --> DetectLang[Détection de langue via Lingua]
         DetectLang --> CheckCaptureCond{Longueur texte >= 5 ?}
-        CheckCaptureCond -- Oui --> CaptureFX[JavaFX WebView : Rendu & Snapshot PNG]
+        CheckCaptureCond -- Oui --> CaptureFX[Chromium headless : Rendu & Capture PNG]
         CheckCaptureCond -- Non --> SkipCapture[Capture ignorée]
         CaptureFX --> MarkSuspicious[Statut = 'Suspicious' LED Rouge]
         SkipCapture --> MarkSuspicious
@@ -550,7 +549,7 @@ flowchart TB
     end
 
     subgraph ExternalLibraries [" Bibliothèques et Moteurs Tiers "]
-        JavaFX[OpenJFX 21 WebView\nWebKit & Glass GTK]
+        Chromium[Playwright 1.63\nChromium headless]
         JSoup[JSoup 1.17.2\nHTML Parser]
         Lingua[Lingua 1.2.1\nLanguage Detection]
         JettyServer[Jetty Embedded Server 3.5.0]
@@ -578,7 +577,7 @@ flowchart TB
     CheckEngine --> DBService
     AnalyzerEngine --> JSoup
     AnalyzerEngine --> Lingua
-    AnalyzerEngine --> JavaFX
+    AnalyzerEngine --> Chromium
     DBService --> H2Engine
     Controllers --> JettyServer
     Controllers --> DTOs
@@ -593,10 +592,6 @@ Ce diagramme décrit l'implantation physique et les nœuds d'exécution sur le s
 ```mermaid
 flowchart TB
     subgraph HostSystem [" 💻 Machine Hôte (Linux / Windows) "]
-        subgraph DisplaySubsystem [" Sous-système Graphique "]
-            XServer[" Serveur X11 / Xvfb (:99)\n(Requis pour rendu JavaFX Headless sous Linux) "]
-        end
-
         subgraph JVM_Frontend [" ☕ JVM 1 - Processus Client "]
             FatJar[" Archive fatJar : JTypoSquatting.jar\nMain-Class: com.aleph...ui.JTypoFrame "]
             SwingAWT[" Java Desktop (AWT / Swing)\nComposants graphiques, tables, rendus "]
@@ -606,7 +601,7 @@ flowchart TB
         subgraph JVM_Backend [" ☕ JVM 2 - Processus Serveur (Spring Boot) "]
             BootApp[" Application Spring Boot : JTypoSquattingApplication\nConteneur Jetty embarqué sur port 8080 "]
             VThreads[" Virtual Thread Pool (Java 21 Project Loom) "]
-            FXEngine[" JavaFX Runtime Engine (Prism SW, WebKit libjfxwebkit.so) "]
+            FXEngine[" Chromium headless (Playwright), pool de navigateurs "]
             BootApp --- VThreads
             BootApp --- FXEngine
         end
@@ -626,8 +621,7 @@ flowchart TB
     end
 
     %% Liaisons
-    SwingAWT -.->|Affiche fenêtre UI| XServer
-    FXEngine -.->|Rendu off-screen DISPLAY=:99| XServer
+    SwingAWT -.->|Affiche fenêtre UI| Display[" Écran de l'utilisateur "]
 
     JVM_Frontend <===>|Loopback HTTP 127.0.0.1:8080\nREST & Server-Sent Events| JVM_Backend
 
@@ -735,7 +729,7 @@ Chaque événement SSE émis sur le canal `domainUpdate` encapsule un objet JSON
 - Les cibles interrogées étant par nature potentiellement malveillantes (sites de phishing, scam, serveurs C2), le moteur isole l'analyse :
   - Utilisation d'un User-Agent générique masquant la signature de l'outil.
   - Définition de timeouts stricts (connexion 3s, lecture 10s) pour prévenir les attaques de type Slowloris.
-  - Exécution du moteur JavaFX WebView sans cookies ni stockage persistant partagé.
+  - Exécution de Chromium headless dans un contexte neuf par capture, sans cookies ni stockage partagés, requêtes filtrées par la politique anti-SSRF.
 
 ---
 
