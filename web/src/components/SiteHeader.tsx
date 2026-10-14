@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 import { Suspense } from "react";
 import { Link } from "@/i18n/navigation";
 import { LocaleSwitcher } from "./LocaleSwitcher";
+import { UserMenu } from "./UserMenu";
 
 export function SiteHeader() {
   const t = useTranslations("Nav");
@@ -28,6 +29,7 @@ export function SiteHeader() {
           <Suspense fallback={null}>
             <LocaleSwitcher />
           </Suspense>
+          <UserMenu />
         </div>
       </nav>
     </header>

@@ -64,6 +64,17 @@ class SecurityConfigTest {
         }
 
         @Test
+        @DisplayName("La déconnexion renvoie l'URL de fin de session en JSON (pas de redirection)")
+        void testJsonLogout() throws Exception {
+            // Enregistrement client de test inconnu du fournisseur : repli sur l'URL par défaut
+            mvc.perform(post("/logout").with(oidcLogin()).with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith("application/json"))
+                    .andExpect(jsonPath("$.logoutUrl").value("/"));
+            mvc.perform(post("/logout").with(oidcLogin())).andExpect(status().isForbidden());
+        }
+
+        @Test
         @DisplayName("En-têtes de sécurité présents sur les réponses de l'API")
         void testSecurityHeaders() throws Exception {
             mvc.perform(get("/api/me").with(oidcLogin()))

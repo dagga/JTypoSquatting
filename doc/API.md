@@ -82,7 +82,9 @@ The security mode is selected with `jtypo.security.mode`.
 - Every `/api/**` call without a valid session returns **401 Unauthorized** (no redirect).
 - Requests that modify data (`POST`, `PUT`, `DELETE`) require the CSRF token: read the `XSRF-TOKEN`
   cookie and send it back in the `X-XSRF-TOKEN` header. Otherwise the response is **403 Forbidden**.
-- `POST /logout` ends the session and the identity provider session.
+- `POST /logout` (with the CSRF header) ends the session and returns `{"logoutUrl": "..."}`, the identity
+  provider end-session URL: a `fetch()` cannot follow a cross-origin redirect, so the frontend navigates to it.
+- After login, the browser is sent to `jtypo.security.post-login-url` (default `/app`).
 
 | Property | Environment variable | Description |
 |----------|---------------------|-------------|
