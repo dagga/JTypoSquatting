@@ -351,6 +351,14 @@ docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --
   (no user namespaces): the container is the sandbox.
 - Terminate TLS in front of nginx (or add a 443 server) and set `X-Forwarded-Proto` accordingly.
 
+### Continuous integration and delivery
+
+The `Build and Release` workflow runs the backend tests (with Testcontainers on the Docker engine of the
+runner), the frontend checks and end-to-end tests, then builds the three images. Outside pull requests,
+they are pushed to `ghcr.io/<owner>/jtyposquatting-{api,worker,web}` with the branch, version and commit
+tags. Deployment is then a matter of pulling these tags on the target host (`docker compose pull && docker
+compose up -d`), to be scripted for your hosting.
+
 ---
 
 ## 6. Native Installers
