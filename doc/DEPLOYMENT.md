@@ -295,6 +295,39 @@ log.frontend.path=/tmp/jtypo-frontend.log
 
 ---
 
+## 5bis. Web Service Deployment (API and workers)
+
+The backend JAR (`./gradlew :backend:bootJar`) runs in two roles, chosen with a Spring profile:
+
+| Role | Profile | HTTP | Processes scans | Needs Chromium | Network |
+|------|---------|------|-----------------|----------------|---------|
+| API | `api` | yes | no | no | behind the reverse proxy, reaches MySQL, S3, OIDC provider |
+| Worker | `worker` | no | yes | yes | **isolated**: MySQL and S3 only inside, Internet egress for checks |
+
+```bash
+SPRING_PROFILES_ACTIVE=api    java -jar backend.jar   # one or more instances
+SPRING_PROFILES_ACTIVE=worker java -jar backend.jar   # scale the number of workers with the load
+```
+
+Workers coordinate through the `scans` table: each scan is claimed by one worker, which sends a heartbeat;
+if a worker dies, another one resumes its scans after `jtypo.worker.stale-after-ms` (2 min) without
+checking the domains already done. API instances share sessions through MySQL (Spring Session).
+
+Main environment variables:
+
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | both | `jdbc:mysql://host:3306/jtypo`; schema created by Flyway |
+| `STORAGE_TYPE=s3`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` | both | Screenshot storage |
+| `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | API | OpenID Connect provider |
+| `SESSION_COOKIE_SECURE=true`, `FORWARD_HEADERS_STRATEGY=framework` | API | Behind the HTTPS reverse proxy |
+| `jtypo.worker.max-concurrent-scans` | worker | Scans processed at the same time (default 4) |
+| `jtypo.analysis.max-concurrent-checks` | worker | Outbound checks at the same time (default 64) |
+
+Development services (MySQL, Keycloak) are described in `docker-compose.yml`.
+
+---
+
 ## 6. Native Installers
 
 ### 6.1 Prerequisites for jpackage
