@@ -1,0 +1,167 @@
+{
+  "Metadata": {
+    "title": "JTypoSquatting — détection de typosquatting",
+    "description": "Générez les variantes d'un nom de domaine (fautes de frappe, homoglyphes, extensions...) et repérez celles qui sont enregistrées et actives."
+  },
+  "Nav": {
+    "home": "Accueil",
+    "algorithms": "Fonctionnement",
+    "faq": "FAQ",
+    "app": "Mes analyses",
+    "login": "Se connecter",
+    "logout": "Se déconnecter",
+    "language": "Langue",
+    "skip": "Aller au contenu"
+  },
+  "Footer": {
+    "legal": "Mentions légales",
+    "terms": "Conditions d'utilisation",
+    "privacy": "Confidentialité"
+  },
+  "Home": {
+    "title": "Repérez les domaines qui imitent le vôtre",
+    "lead": "Les typosquatteurs enregistrent des domaines presque identiques au vôtre pour hameçonner vos clients ou capter leur trafic. JTypoSquatting génère ces variantes et vérifie lesquelles sont en ligne.",
+    "cta": "Lancer une analyse",
+    "how": "Comment ça marche",
+    "step1Title": "Générer",
+    "step1": "21 algorithmes produisent des milliers de variantes : fautes de frappe, caractères qui se ressemblent, extensions, tirets, pluriels…",
+    "step2Title": "Vérifier",
+    "step2": "Chaque variante est contactée : réponse HTTP, certificat TLS, titre, langue, capture d'écran.",
+    "step3Title": "Analyser",
+    "step3": "Les résultats arrivent en direct et s'exportent en CSV ou JSON pour vos équipes sécurité ou juridiques."
+  },
+  "Algorithms": {
+    "title": "Fonctionnement",
+    "lead": "Chaque analyse applique 21 algorithmes de génération au domaine saisi, puis vérifie chaque variante.",
+    "families": {
+      "characters": "Caractères",
+      "charactersText": "Omission, répétition, inversion, ajout ou changement de voyelle : exmple.com, exxample.com, exmaple.com.",
+      "keyboard": "Clavier",
+      "keyboardText": "Touches voisines sur les claviers QWERTY et AZERTY : wxample.com, gppgle.com.",
+      "visual": "Homoglyphes",
+      "visualText": "Caractères visuellement identiques d'autres alphabets : ехаmple.com (cyrillique).",
+      "separators": "Points et tirets",
+      "separatorsText": "Tirets ajoutés ou retirés, points oubliés ou ajoutés : ex-ample.com, wwwexample.com, ex.ample.com.",
+      "words": "Mots",
+      "wordsText": "Fautes d'orthographe courantes, homophones, pluriels, chiffres en lettres : forseasons.com, shopforyou.com.",
+      "suffixes": "Extensions",
+      "suffixesText": "Autres extensions, extensions ajoutées, mauvais second niveau, DNS dynamique : example.fr, example.com.br, example.duckdns.org."
+    },
+    "checksTitle": "Ce qui est vérifié",
+    "checks": "Pour chaque variante : réponse HTTP, validité du certificat TLS, titre, description et langue de la page, et capture d'écran prise dans un navigateur isolé. Les vérifications de moins de 24 heures sont partagées entre utilisateurs."
+  },
+  "Faq": {
+    "title": "Questions fréquentes",
+    "q1": "Le service visite-t-il les sites trouvés ?",
+    "a1": "Oui, depuis une infrastructure isolée et avec un User-Agent identifiable. Votre navigateur ne contacte jamais ces sites, sauf si vous ouvrez un lien après l'avertissement.",
+    "q2": "Combien d'analyses puis-je lancer ?",
+    "a2": "Deux analyses simultanées et cinquante par période de 24 heures, pour garantir un service équitable.",
+    "q3": "Pourquoi certains domaines s'affichent-ils avec des caractères étranges ?",
+    "a3": "Ce sont des homoglyphes : des caractères d'autres alphabets identiques à l'œil nu. La forme technique (punycode, xn--…) est aussi affichée.",
+    "q4": "Que signifie un certificat « non fiable » ?",
+    "a4": "Le site présente un certificat auto-signé, expiré ou émis pour un autre nom. C'est fréquent sur les domaines frauduleux."
+  },
+  "Legal": {
+    "title": "Mentions légales",
+    "body": "Éditeur, directeur de la publication et hébergeur : informations à compléter avant la mise en production."
+  },
+  "Terms": {
+    "title": "Conditions d'utilisation",
+    "body": "Le service est destiné à la protection de vos propres marques et domaines. Toute utilisation visant à sonder massivement des sites tiers, à contourner les quotas ou à nuire à autrui est interdite. Texte complet à valider juridiquement avant la mise en production."
+  },
+  "Privacy": {
+    "title": "Confidentialité",
+    "body": "Nous conservons votre identifiant, votre adresse e-mail et l'historique de vos analyses, pour vous rendre le service. Durées de conservation et exercice de vos droits : à compléter avant la mise en production."
+  },
+  "App": {
+    "title": "Mes analyses",
+    "loginRequired": "Connectez-vous pour lancer et suivre vos analyses.",
+    "loading": "Chargement…",
+    "newScan": "Nouvelle analyse",
+    "domainLabel": "Nom de domaine",
+    "domainPlaceholder": "exemple.fr",
+    "forceRefresh": "Ignorer le cache (revérifier tous les domaines)",
+    "start": "Analyser",
+    "starting": "Lancement…",
+    "history": "Historique",
+    "empty": "Aucune analyse pour le moment.",
+    "open": "Ouvrir",
+    "errors": {
+      "invalidDomain": "Ce nom de domaine n'est pas valide.",
+      "quota": "Quota atteint : {message}. Réessayez dans {seconds} s.",
+      "generic": "Une erreur est survenue. Réessayez plus tard.",
+      "forbidden": "Cette analyse ne vous appartient pas.",
+      "notFound": "Analyse introuvable."
+    }
+  },
+  "Scan": {
+    "back": "Toutes les analyses",
+    "titleFor": "Analyse de {domain}",
+    "status": {
+      "PENDING": "En attente",
+      "RUNNING": "En cours",
+      "COMPLETED": "Terminée",
+      "CANCELLED": "Annulée",
+      "FAILED": "Échec"
+    },
+    "progress": "{checked} / {total} domaines vérifiés",
+    "cancel": "Annuler l'analyse",
+    "counters": {
+      "checked": "Vérifiés",
+      "online": "En ligne",
+      "suspicious": "Suspects",
+      "unreachable": "Injoignables"
+    },
+    "filter": "Filtrer",
+    "onlyOnline": "Uniquement les domaines en ligne",
+    "export": "Exporter",
+    "columns": {
+      "domain": "Domaine",
+      "status": "Statut",
+      "http": "HTTP",
+      "tls": "TLS",
+      "title": "Titre",
+      "language": "Langue"
+    },
+    "noResults": "Aucun résultat pour l'instant.",
+    "streamError": "La connexion au flux en direct a été perdue. Rechargez la page.",
+    "domainStatus": {
+      "Suspicious": "Suspect",
+      "Safe": "En ligne",
+      "Unreachable": "Injoignable",
+      "Active": "Actif",
+      "Dead": "Inactif",
+      "Testing...": "Test…",
+      "Unknown": "Inconnu"
+    },
+    "tlsStatus": {
+      "VALID": "Valide",
+      "EXPIRED": "Expiré",
+      "HOSTNAME_MISMATCH": "Nom incorrect",
+      "UNTRUSTED": "Non fiable",
+      "HANDSHAKE_FAILED": "Échec TLS",
+      "NONE": "—"
+    }
+  },
+  "Details": {
+    "close": "Fermer",
+    "punycode": "Forme technique",
+    "screenshot": "Capture d'écran",
+    "noScreenshot": "Pas de capture pour ce domaine.",
+    "description": "Description",
+    "homepage": "Début de la page",
+    "headers": "En-têtes HTTP",
+    "checkedAt": "Vérifié le {date}",
+    "visit": "Ouvrir le site…"
+  },
+  "Warning": {
+    "title": "Ouvrir un site potentiellement malveillant ?",
+    "body": "{domain} peut héberger de l'hameçonnage ou des logiciels malveillants. La capture d'écran permet généralement de l'évaluer sans risque. Ne saisissez aucune information sur ce site.",
+    "confirm": "Ouvrir quand même",
+    "cancel": "Annuler"
+  },
+  "NotFound": {
+    "title": "Page introuvable",
+    "back": "Retour à l'accueil"
+  }
+}
