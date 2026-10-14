@@ -63,7 +63,24 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 - ✅ Log viewer (backend/frontend)
 - ✅ Multi-language support (EN/FR)
 
-### Testing & CI/CD
+### Web Frontend (Next.js)
+
+The public web service has a Next.js 16 frontend in `web/` (French and English).
+
+```bash
+cd web
+npm install
+npm run dev            # http://localhost:3000, /api and login are forwarded to the backend on :8081
+npm run lint && npm run typecheck
+npm run test:e2e       # Playwright, production build, simulated backend
+```
+
+Run the backend in web mode for local development (Keycloak and MySQL from `docker-compose.yml`), with
+`FORWARD_HEADERS_STRATEGY=framework` so that login redirects come back to port 3000.
+
+---
+
+## Testing & CI/CD
 - ✅ JUnit 5 unit and functional tests
 - ✅ Integration tests with Spring Boot
 - ✅ GitHub Actions CI/CD pipeline
