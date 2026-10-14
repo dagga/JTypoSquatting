@@ -66,6 +66,18 @@ export async function logout(): Promise<void> {
   window.location.assign(logoutUrl);
 }
 
+/** Everything stored about the user (GDPR access and portability), as a JSON string. */
+export async function exportMyData(): Promise<string> {
+  return JSON.stringify(await request<unknown>("/api/me/export"), null, 2);
+}
+
+/** Deletes the account and its data, then logs out (which also ends the identity provider session). */
+export async function deleteMyAccount(): Promise<void> {
+  if (!csrfToken()) await getCurrentUser();
+  await request<void>("/api/me", { method: "DELETE" });
+  await logout();
+}
+
 export function listScans(): Promise<Scan[]> {
   return request<Scan[]>("/api/scans");
 }

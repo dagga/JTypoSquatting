@@ -71,7 +71,7 @@
   },
   "Privacy": {
     "title": "Confidentialité",
-    "body": "Nous conservons votre identifiant, votre adresse e-mail et l'historique de vos analyses, pour vous rendre le service. Durées de conservation et exercice de vos droits : à compléter avant la mise en production."
+    "body": "Nous conservons votre identifiant, votre adresse e-mail et l'historique de vos analyses, pour vous rendre le service. Les analyses sont supprimées après 90 jours. Vous pouvez exporter vos données ou supprimer votre compte à tout moment depuis « Mes analyses › Mes données ». Responsable de traitement et contact : à compléter avant la mise en production."
   },
   "App": {
     "title": "Mes analyses",
@@ -163,5 +163,17 @@
   "NotFound": {
     "title": "Page introuvable",
     "back": "Retour à l'accueil"
+  },
+  "Account": {
+    "title": "Mes données",
+    "export": "Exporter mes données (JSON)",
+    "exportHelp": "Votre profil, vos analyses et leurs résultats, dans un format réutilisable.",
+    "delete": "Supprimer mon compte",
+    "deleteHelp": "Efface définitivement votre compte, vos analyses et les captures qui ne servent à personne d'autre.",
+    "confirmTitle": "Supprimer définitivement votre compte ?",
+    "confirmBody": "Vos analyses et leurs résultats seront effacés. Cette action est irréversible. Votre compte auprès du fournisseur d'identité est géré séparément.",
+    "confirm": "Supprimer définitivement",
+    "cancel": "Annuler",
+    "error": "La suppression a échoué. Réessayez plus tard."
   }
 }

@@ -70,6 +70,12 @@ export async function mockBackend(page: Page, options: MockOptions = {}) {
     if (!loggedIn) {
       return route.fulfill({ status: 401, contentType: "application/json", body: "{}" });
     }
+    if (url.pathname === "/api/me" && request.method() === "DELETE") {
+      return route.fulfill({ status: 204 });
+    }
+    if (url.pathname === "/api/me/export") {
+      return route.fulfill({ json: { user: USER, scans: [] } });
+    }
     if (url.pathname === "/api/me") {
       return route.fulfill({ json: USER });
     }

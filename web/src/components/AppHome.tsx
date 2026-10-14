@@ -1,5 +1,6 @@
 "use client";
 
+import { AccountData } from "./AccountData";
 import { AuthGate } from "./AuthGate";
 import { ScanForm } from "./ScanForm";
 import { ScanHistory } from "./ScanHistory";
@@ -12,6 +13,7 @@ export function AppHome() {
         <div className="space-y-8">
           <ScanForm />
           <ScanHistory />
+          <AccountData />
         </div>
       )}
     </AuthGate>
