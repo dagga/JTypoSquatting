@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.scan;
 
 import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.dto.GenerationRequestDTO;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -80,8 +81,12 @@ public class ScanController {
     @GetMapping(value = "/{id}/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter events(@PathVariable String id,
                              @RequestHeader(value = "Last-Event-ID", required = false) String lastEventId,
-                             @AuthenticationPrincipal OidcUser user) {
+                             @AuthenticationPrincipal OidcUser user,
+                             HttpServletResponse response) {
         scanService.getScan(ScanUser.of(user), id);
+        // Proxies must neither compress nor buffer the stream (Next.js rewrites, nginx)
+        response.setHeader("Cache-Control", "no-cache, no-transform");
+        response.setHeader("X-Accel-Buffering", "no");
         return eventStreamer.stream(id, parseEventId(lastEventId));
     }
 

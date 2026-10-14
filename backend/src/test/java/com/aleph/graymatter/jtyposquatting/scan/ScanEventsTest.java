@@ -60,6 +60,8 @@ class ScanEventsTest {
         jdbc.update("UPDATE scans SET status = ? WHERE id = ?", status.name(), scanId);
     }
 
+    private org.springframework.mock.web.MockHttpServletResponse lastResponse;
+
     private static int count(String body, String regex) {
         Matcher m = Pattern.compile(regex, Pattern.MULTILINE).matcher(body);
         int n = 0;
@@ -80,6 +82,7 @@ class ScanEventsTest {
         }
         MvcResult result = mvc.perform(builder).andExpect(request().asyncStarted()).andReturn();
         result.getAsyncResult(10_000);
+        lastResponse = result.getResponse();
         return result.getResponse().getContentAsString();
     }
 
@@ -97,6 +100,8 @@ class ScanEventsTest {
         assertEquals(1, count(body, "^event:end$"), body);
         assertTrue(body.contains("\"domain\":\"exmple.com\""));
         assertTrue(body.contains("\"status\":\"COMPLETED\""));
+        assertEquals("no-cache, no-transform", lastResponse.getHeader("Cache-Control"));
+        assertEquals("no", lastResponse.getHeader("X-Accel-Buffering"));
     }
 
     @Test
