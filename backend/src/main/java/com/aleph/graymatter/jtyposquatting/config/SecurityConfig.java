@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestCustomizers;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -61,10 +63,15 @@ public class SecurityConfig {
                                                 ClientRegistrationRepository clientRegistrations,
                                                 @Value("${jtypo.security.post-login-url:/app}") String postLoginUrl,
                                                 @Value("${jtypo.security.post-logout-url:{baseUrl}/}") String postLogoutUrl,
+                                                @Value("${jtypo.security.login-failure-url:/app?loginError=1}") String loginFailureUrl,
                                                 @Value("${jtypo.rate-limit.requests-per-minute:120}") int requestsPerMinute,
                                                 MeterRegistry meters)
             throws Exception {
         JsonLogoutSuccessHandler logoutSuccessHandler = new JsonLogoutSuccessHandler(clientRegistrations, postLogoutUrl);
+        // PKCE also for this confidential client (required by the identity provider, protects the authorization code)
+        DefaultOAuth2AuthorizationRequestResolver authorizationRequestResolver =
+                new DefaultOAuth2AuthorizationRequestResolver(clientRegistrations, "/oauth2/authorization");
+        authorizationRequestResolver.setAuthorizationRequestCustomizer(OAuth2AuthorizationRequestCustomizers.withPkce());
 
         http
                 .authorizeHttpRequests(auth -> auth
@@ -76,7 +83,11 @@ public class SecurityConfig {
                 // Single provider: browsers go straight to it instead of a generated login page
                 .oauth2Login(login -> login
                         .loginPage("/oauth2/authorization/" + LazyClientRegistrationRepository.REGISTRATION_ID)
-                        .defaultSuccessUrl(postLoginUrl, true))
+                        .authorizationEndpoint(endpoint -> endpoint.authorizationRequestResolver(authorizationRequestResolver))
+                        .defaultSuccessUrl(postLoginUrl, true)
+                        // Back to the application with an error: going to the login page would start the
+                        // provider redirection again, in a loop
+                        .failureUrl(loginFailureUrl))
                 .logout(logout -> logout.logoutSuccessHandler(logoutSuccessHandler))
                 // API calls get a 401 instead of a redirect to the login page
                 .exceptionHandling(ex -> ex.defaultAuthenticationEntryPointFor(

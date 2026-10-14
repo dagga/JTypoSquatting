@@ -92,7 +92,8 @@
       "generic": "Une erreur est survenue. Réessayez plus tard.",
       "forbidden": "Cette analyse ne vous appartient pas.",
       "notFound": "Analyse introuvable."
-    }
+    },
+    "loginFailed": "La connexion a échoué. Réessayez ; si le problème persiste, contactez-nous."
   },
   "Scan": {
     "back": "Toutes les analyses",

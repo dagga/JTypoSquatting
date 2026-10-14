@@ -7,6 +7,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.security.oauth2.client.registration.ClientRegistration;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
+import org.springframework.security.oauth2.core.AuthorizationGrantType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -148,6 +156,56 @@ class SecurityConfigTest {
             mvc.perform(get("/api/cancel").with(oidcLogin())).andExpect(status().isNotFound());
             mvc.perform(get("/api/generate-and-check").param("domain", "example.com").with(oidcLogin()))
                     .andExpect(status().isNotFound());
+        }
+    }
+
+    @Nested
+    @SpringBootTest
+    @AutoConfigureMockMvc
+    @ActiveProfiles("test")
+    @Import(OidcLoginFlow.TestProvider.class)
+    class OidcLoginFlow {
+
+        /** Identity provider declared without discovery, so that the test needs no network. */
+        @TestConfiguration
+        static class TestProvider {
+            @Bean
+            @Primary
+            ClientRegistrationRepository testClientRegistrations() {
+                return new InMemoryClientRegistrationRepository(ClientRegistration.withRegistrationId("oidc")
+                        .clientId("jtypo-web")
+                        .clientSecret("secret")
+                        .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
+                        .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
+                        .scope("openid")
+                        .authorizationUri("https://idp.example/auth")
+                        .tokenUri("https://idp.example/token")
+                        .jwkSetUri("https://idp.example/certs")
+                        .userNameAttributeName("sub")
+                        .build());
+            }
+        }
+
+        @Autowired
+        private MockMvc mvc;
+
+        @Test
+        @DisplayName("La demande d'autorisation utilise PKCE (exigé par le fournisseur d'identité)")
+        void testPkce() throws Exception {
+            String location = mvc.perform(get("/oauth2/authorization/oidc"))
+                    .andExpect(status().is3xxRedirection())
+                    .andReturn().getResponse().getHeader("Location");
+            org.junit.jupiter.api.Assertions.assertTrue(location.startsWith("https://idp.example/auth?"), location);
+            org.junit.jupiter.api.Assertions.assertTrue(location.contains("code_challenge="), location);
+            org.junit.jupiter.api.Assertions.assertTrue(location.contains("code_challenge_method=S256"), location);
+        }
+
+        @Test
+        @DisplayName("Un échec de connexion ramène à l'application au lieu de relancer la redirection en boucle")
+        void testLoginFailureDoesNotLoop() throws Exception {
+            mvc.perform(get("/login/oauth2/code/oidc").param("error", "invalid_request").param("state", "unknown"))
+                    .andExpect(status().is3xxRedirection())
+                    .andExpect(redirectedUrl("/app?loginError=1"));
         }
     }
 

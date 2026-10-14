@@ -35,3 +35,11 @@ test("le sélecteur de langue conserve la page courante", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Frequently asked questions" })).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });
+
+test("un échec de connexion est signalé sans relancer la connexion", async ({ page }) => {
+  await mockBackend(page, { loggedIn: false });
+  await page.goto("/fr/app?loginError=1");
+
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(/La connexion a échoué/);
+  await expect(page.getByRole("main").getByRole("link", { name: "Se connecter" })).toBeVisible();
+});
