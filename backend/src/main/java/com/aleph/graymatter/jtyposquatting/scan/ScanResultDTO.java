@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.scan;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.dto.TlsStatus;
+import com.aleph.graymatter.jtyposquatting.storage.ScreenshotStore;
 
 import java.time.Instant;
 import java.util.Map;
@@ -30,6 +31,8 @@ public record ScanResultDTO(
     public static ScanResultDTO of(ScanResult result) {
         return new ScanResultDTO(result.id(), result.domainUnicode(), result.domain(), result.status(),
                 result.httpCode(), result.tlsStatus(), result.title(), result.language(), result.description(),
-                result.homepageText(), result.httpHeaders(), null, result.checkedAt());
+                result.homepageText(), result.httpHeaders(),
+                result.screenshotKey() != null ? "/api/screenshots/" + ScreenshotStore.hashOf(result.screenshotKey()) : null,
+                result.checkedAt());
     }
 }

@@ -78,6 +78,11 @@ project(':backend') {
         implementation 'org.springframework.boot:spring-boot-starter-security:3.5.0'
         implementation 'org.springframework.boot:spring-boot-starter-oauth2-client:3.5.0'
 
+        // Screenshot storage on any S3-compatible service (Netty client excluded: the Apache client is used)
+        implementation('software.amazon.awssdk:s3:2.55.16') {
+            exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+        }
+
         // Rate limiting
         implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
 

@@ -5,6 +5,7 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.dto.TlsStatus;
 import com.aleph.graymatter.jtyposquatting.persistence.DomainKeys;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
+import com.aleph.graymatter.jtyposquatting.storage.ScreenshotStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -22,13 +23,15 @@ public class DomainChecker {
 
     private final DomainCheckService domainCheckService;
     private final DomainCheckRepository cache;
+    private final ScreenshotStore screenshots;
     private final Duration ttl;
     private final Clock clock = Clock.systemUTC();
 
-    public DomainChecker(DomainCheckService domainCheckService, DomainCheckRepository cache,
+    public DomainChecker(DomainCheckService domainCheckService, DomainCheckRepository cache, ScreenshotStore screenshots,
                          @Value("${jtypo.cache.ttl-hours:24}") long ttlHours) {
         this.domainCheckService = domainCheckService;
         this.cache = cache;
+        this.screenshots = screenshots;
         this.ttl = Duration.ofHours(ttlHours);
     }
 
@@ -43,16 +46,19 @@ public class DomainChecker {
                 return cached.get();
             }
         }
-        DomainCheck check = toCheck(domain, domainCheckService.analyze(domain), clock.instant());
+        DomainResultDTO result = domainCheckService.analyze(domain);
+        byte[] png = result.getScreenshot();
+        String screenshotKey = png != null && png.length > 0 ? screenshots.put(png) : null;
+        DomainCheck check = toCheck(domain, result, screenshotKey, clock.instant());
         cache.save(check);
         return check;
     }
 
-    private static DomainCheck toCheck(String domain, DomainResultDTO result, Instant now) {
+    private static DomainCheck toCheck(String domain, DomainResultDTO result, String screenshotKey, Instant now) {
         DomainStatus status = result.getStatus() != null ? result.getStatus() : DomainStatus.UNKNOWN;
         TlsStatus tlsStatus = result.getTlsStatus() != null ? result.getTlsStatus() : TlsStatus.NONE;
         return new DomainCheck(domain, DomainKeys.toUnicode(domain), status, result.getHttpCode(), tlsStatus,
                 result.getTitle(), result.getLanguage(), result.getDescription(), result.getHomepageText(),
-                result.getHttpHeaders(), null, now);
+                result.getHttpHeaders(), screenshotKey, now);
     }
 }
