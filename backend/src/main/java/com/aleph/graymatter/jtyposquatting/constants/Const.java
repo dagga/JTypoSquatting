@@ -6,14 +6,6 @@ import static java.util.Map.entry;
 
 public final class Const {
 
-    // Replacement of String[] with immutable List<String>
-    public static final List<String> ALGO_NAME_LIST = List.of(
-            "omission", "repetition", "changeOrder", "replacement", "doubleReplacement",
-            "addition", "missingDot", "stripDash", "vowelSwap", "addDash", "homoglyph",
-            "commonMisspelling", "homophones", "wrongTld", "addTld", "subdomain",
-            "singularPluralize", "changeDotDash", "wrongSld", "numeralSwap", "addDynamicDns"
-    );
-
     public static final List<String> EXCLUDED_TLD = List.of("gouv.fr"); // for example
 
     // An immutable Map defined in a single clear block (no need for A to Z variables!)
@@ -61,6 +53,36 @@ public final class Const {
             entry('7', List.of("seven", "seventh")),
             entry('8', List.of("eight", "eighth")),
             entry('9', List.of("nine", "ninth"))
+    );
+
+    // Groups of words that sound alike; any word of a group can replace another
+    public static final List<List<String>> HOMOPHONES = List.of(
+            List.of("ate", "eight"), List.of("bare", "bear"), List.of("be", "bee"),
+            List.of("blew", "blue"), List.of("brake", "break"), List.of("buy", "by", "bye"),
+            List.of("cell", "sell"), List.of("cent", "scent", "sent"), List.of("dear", "deer"),
+            List.of("die", "dye"), List.of("fair", "fare"), List.of("flour", "flower"),
+            List.of("for", "four"), List.of("hair", "hare"), List.of("hear", "here"),
+            List.of("hi", "high"), List.of("hole", "whole"), List.of("hour", "our"),
+            List.of("knew", "new"), List.of("knight", "night"), List.of("know", "no"),
+            List.of("mail", "male"), List.of("meat", "meet"), List.of("one", "won"),
+            List.of("pair", "pear"), List.of("peace", "piece"), List.of("plain", "plane"),
+            List.of("right", "write"), List.of("road", "rode"), List.of("sail", "sale"),
+            List.of("sea", "see"), List.of("son", "sun"), List.of("tail", "tale"),
+            List.of("their", "there"), List.of("to", "too", "two"), List.of("wait", "weight"),
+            List.of("way", "weigh"), List.of("weak", "week"), List.of("wear", "where"),
+            List.of("which", "witch"), List.of("wood", "would")
+    );
+
+    // Most common dynamic DNS providers, all listed in dynamic-dns.json
+    public static final List<String> DYNAMIC_DNS_PROVIDERS = List.of(
+            "duckdns.org", "ddns.net", "hopto.org", "zapto.org", "sytes.net", "myftp.org",
+            "dyndns.org", "dynu.com", "mooo.com", "us.to", "servebeer.com", "serveftp.com",
+            "redirectme.net", "3utilities.com"
+    );
+
+    // Second-level labels commonly used under country-code TLDs (example.co.uk, example.com.au...)
+    public static final List<String> COMMON_SLD = List.of(
+            "co", "com", "net", "org", "ac", "gov", "edu", "ltd", "plc", "me", "biz", "info"
     );
 
     private Const() {

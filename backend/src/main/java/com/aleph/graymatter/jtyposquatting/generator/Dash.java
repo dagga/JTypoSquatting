@@ -3,13 +3,13 @@ package com.aleph.graymatter.jtyposquatting.generator;
 import com.aleph.graymatter.jtyposquatting.InvalidDomainException;
 import com.aleph.graymatter.jtyposquatting.net.DomainName;
 
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 // it would not work with domain names like xxx.yyy.www.zz domains with www.yyy has subdomain
 public class Dash {
-    public static void addDash(DomainName domainName, ArrayList<DomainName> resultList) {
+    public static void addDash(DomainName domainName, List<DomainName> resultList) {
         String fullDomain = domainName.toString();
         String tld = domainName.getTLD();
         String base = fullDomain.substring(0, fullDomain.length() - tld.length() - 1);
@@ -38,7 +38,7 @@ public class Dash {
         }
     }
 
-    public static void removeDash(DomainName domainName, ArrayList<DomainName> resultList) {
+    public static void removeDash(DomainName domainName, List<DomainName> resultList) {
         String fullDomain = domainName.toString();
         String tld = domainName.getTLD();
         String base = fullDomain.substring(0, fullDomain.length() - tld.length() - 1);

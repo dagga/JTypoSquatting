@@ -147,6 +147,36 @@ For each character in domain:
 2. **Add TLD suffix:** `example.eu` → `example.eu.com`
 3. **Country TLD:** Add common country TLDs (.fr, .de, .co.uk)
 
+### 2.5 Algorithm Registry
+
+**File:** `backend/src/main/java/com/aleph/graymatter/jtyposquatting/generator/Algorithm.java`
+
+Every algorithm is declared in the `Algorithm` enum, bound to its implementation. `JTypoSquatting` applies all of them to the original domain and removes duplicates. Variants keep the subdomain and the public suffix (computed with the Public Suffix List, so `co.uk` is handled as a single suffix), and invalid domain names are discarded.
+
+| Id | Class | Example |
+|----|-------|---------|
+| `omission` | `CharacterEdits` | `example.com` → `exmple.com` |
+| `repetition` | `CharacterEdits` | `example.com` → `exxample.com` |
+| `changeOrder` | `CharacterEdits` | `example.com` → `exmaple.com` |
+| `addition` | `CharacterEdits` | `example.com` → `examplea.com` |
+| `vowelSwap` | `CharacterEdits` | `example.com` → `exampla.com` |
+| `replacement` | `Keyboard` | `example.com` → `wxample.com` (QWERTY and AZERTY adjacency) |
+| `doubleReplacement` | `Keyboard` | `google.com` → `gppgle.com` |
+| `addDash` | `Dash` | `example.com` → `ex-ample.com` |
+| `stripDash` | `Dash` | `my-example.com` → `myexample.com` |
+| `missingDot` | `DotDash` | `www.example.com` → `wwwexample.com` |
+| `subdomain` | `DotDash` | `example.com` → `ex.ample.com` |
+| `changeDotDash` | `DotDash` | `www.example.com` → `www-example.com` |
+| `homoglyph` | `Homoglyph` | `example.com` → `ехаmple.com` |
+| `commonMisspelling` | `Misspell` | `absence.com` → `absense.com` |
+| `homophones` | `Words` | `fourseasons.com` → `forseasons.com` |
+| `singularPluralize` | `Words` | `example.com` → `examples.com` |
+| `numeralSwap` | `Words` | `shop4you.com` → `shopforyou.com`, `oneclick.com` → `1click.com` |
+| `wrongTld` | `TLD` | `example.com` → `example.fr` |
+| `addTld` | `Suffixes` | `example.com` → `example.com.br` (only registrable public suffixes) |
+| `wrongSld` | `Suffixes` | `example.co.uk` → `example.org.uk` |
+| `addDynamicDns` | `Suffixes` | `example.com` → `example.duckdns.org` (providers in `Const.DYNAMIC_DNS_PROVIDERS`) |
+
 ---
 
 ## 3. Homoglyph Mappings

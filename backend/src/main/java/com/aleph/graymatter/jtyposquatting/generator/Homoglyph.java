@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Set;
 
 public class Homoglyph {
-    public static void addHomglyphedDomains(DomainName domainName, ArrayList<DomainName> resultList) throws InvalidDomainException {
+    public static void addHomglyphedDomains(DomainName domainName, List<DomainName> resultList) throws InvalidDomainException {
         String domainWithoutTLD = DomainName.getDomainWithoutTLD(domainName.toString());
         String TLD = domainName.getTLD();
         Set<String> uniqueDomains = new HashSet<>();

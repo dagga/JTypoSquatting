@@ -24,7 +24,7 @@ java -jar JTypoSquatting.jar
 
 JTypoSquatting generates potential typo squatted domains from a target domain and checks their status in real-time:
 
-1. **Generate** typo variants using 4 algorithms (Dash, Homoglyph, Misspell, TLD)
+1. **Generate** typo variants using 21 algorithms (keyboard, homoglyph, misspelling, TLD...)
 2. **Check** each domain's HTTP status and capture screenshots
 3. **Display** results with live updates and metrics
 4. **Export** results for further analysis
@@ -79,12 +79,14 @@ JTypoSquatting generates potential typo squatted domains from a target domain an
 
 ## Algorithms
 
-| Algorithm | Description | Example |
-|-----------|-------------|---------|
-| **Dash** | Add/remove/move hyphens | `example.com` → `ex-ample.com` |
-| **Homoglyph** | Visually similar characters | `example` → `ехаmple` (Cyrillic) |
-| **Misspell** | Common spelling mistakes | `absence` → `absense` |
-| **TLD** | Change/add TLDs | `example.eu` → `example.fr` |
+| Family | Algorithms | Example |
+|--------|-----------|---------|
+| **Characters** | omission, repetition, changeOrder, addition, vowelSwap | `example.com` → `exmple.com`, `exmaple.com` |
+| **Keyboard** | replacement, doubleReplacement (QWERTY + AZERTY) | `example.com` → `wxample.com`, `google.com` → `gppgle.com` |
+| **Dash / dot** | addDash, stripDash, missingDot, subdomain, changeDotDash | `example.com` → `ex-ample.com`, `ex.ample.com` |
+| **Visual** | homoglyph | `example` → `ехаmple` (Cyrillic) |
+| **Words** | commonMisspelling, homophones, singularPluralize, numeralSwap | `absence` → `absense`, `shop4you` → `shopforyou` |
+| **Suffix** | wrongTld, addTld, wrongSld, addDynamicDns | `example.com` → `example.fr`, `example.com.br`, `example.duckdns.org` |
 
 **Complete reference:** [Technical Reference - Algorithms](doc/TECHNICAL_REFERENCE.md#2-domain-generation-algorithms)
 
