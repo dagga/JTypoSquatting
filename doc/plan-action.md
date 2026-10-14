@@ -65,6 +65,41 @@ Navigateur ─► Reverse proxy (Traefik / nginx, TLS) ─┬─ /        ─►
 | 5.4 | `System.out.println` → logger | 🟡 Partiel | 5 occurrences restantes |
 | 5.5 | 17 algorithmes manquants | ⏳ À faire | Conservé en Phase 0 |
 
+## 4bis. Avancement (2026-10-14, branche `feature/web-public`)
+
+| Action | Statut | Remarques |
+|---|---|---|
+| P0.1 Actions restantes de l'audit | ✅ | |
+| P0.2 Algorithmes manquants | ✅ | Les 21 algorithmes ; énumération `Algorithm` |
+| P1.1 Authentification | ✅ | Découverte OIDC paresseuse ; mode `local` pour l'application de bureau |
+| P1.2 Anti-SSRF | ✅ | + correctif : domaines internationalisés convertis en punycode avant la requête |
+| P1.3 Playwright | ✅ | Chromium dans le conteneur worker ; isolation réseau dans le compose (P4.1) |
+| P1.4 Validation TLS | ✅ | |
+| P1.5 Anti-abus | 🟡 | Débit, quotas, plafonds, User-Agent : faits. Captcha d'inscription : à activer dans Keycloak (clés du domaine) |
+| P1.6 En-têtes, CORS | ✅ | |
+| P2.1 MySQL + Flyway | ✅ | Migrations par moteur (MySQL, H2 pour le bureau et les tests) |
+| P2.2 Jobs persistants | ✅ | **Écart** : la table `scans` sert de file (réclamation par `UPDATE` conditionnel, portable) au lieu d'une table `scan_jobs` avec `SKIP LOCKED` |
+| P2.3 SSE par analyse, annulation | ✅ | Anciens endpoints chargés en mode bureau uniquement |
+| P2.4 Cache partagé | ✅ | |
+| P2.5 Stockage objet | ✅ | S3 quelconque (tests avec S3Mock : les images MinIO ne sont plus publiées) ou système de fichiers |
+| P2.6 API / workers | ✅ | Les workers gardent un serveur HTTP réduit à la supervision (P4.3) |
+| P2.7 Tests backend | ✅ | `./gradlew test` sans Internet ; tests réseau via `-Dinclude.network=true` |
+| P3.1 Next.js et pages publiques | ✅ | Next.js 16.4, pré-rendu statique |
+| P3.2 Authentification frontend | ✅ | Déconnexion renvoyant l'URL du fournisseur en JSON |
+| P3.3 Application d'analyse | ✅ | Testée avec 5000 résultats |
+| P3.4 Internationalisation | ✅ | Livrée avec P3.1 (next-intl) |
+| P3.5 Consultation sécurisée | ✅ | Livrée avec P3.3 |
+| P3.6 Tests de bout en bout | ✅ | Playwright avec backend simulé, en CI |
+| P3.7 Retrait de Swing | ⏸️ | **Non fait** : décision produit (suppression de l'application de bureau et des installeurs) à valider |
+| P4.1 Conteneurs, reverse proxy | 🟡 | Images, nginx et compose validés avec Podman. Restent : TLS, règles de pare-feu de l'hôte pour le réseau des workers |
+| P4.2 CI/CD | 🟡 | Tests et images publiées sur GHCR ; déploiement à scripter selon l'hébergement |
+| P4.3 Observabilité | ✅ | Prometheus, logs JSON, règles d'alerte ; collecteur et Prometheus à déployer |
+| P4.4 Sauvegardes, rétention | ✅ | Scripts testés ; planification à mettre en place sur l'hôte |
+| P4.5 Conformité | 🟡 | Export et suppression de compte faits ; `doc/CONFORMITE.md` et textes légaux à valider par le juridique |
+
+Critères de mise en production (§ 10) : techniquement couverts, sauf les textes légaux (juridique), la
+supervision effective (déploiement de Prometheus) et les sauvegardes planifiées sur l'hôte.
+
 ## 5. Phase 0 — Finaliser l'assainissement
 
 ### P0.1 Clôturer les actions restantes de l'audit
