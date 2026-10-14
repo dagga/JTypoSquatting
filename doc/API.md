@@ -45,9 +45,37 @@
 
 ## 2. Authentication
 
-The API does not require authentication as it runs locally on the user's machine. Access is restricted to localhost by default.
+The security mode is selected with `jtypo.security.mode`.
 
-**Security Note:** The API should only be accessible from localhost to prevent unauthorized access.
+### 2.1 Web mode (`oidc`, default)
+
+- Users log in through an OpenID Connect provider (Keycloak in development, see `docker-compose.yml`).
+  Browsers are redirected to `/oauth2/authorization/oidc`; after login the backend keeps the session
+  in an httpOnly cookie (`JSESSIONID`). The same cookie authenticates SSE streams.
+- Every `/api/**` call without a valid session returns **401 Unauthorized** (no redirect).
+- Requests that modify data (`POST`, `PUT`, `DELETE`) require the CSRF token: read the `XSRF-TOKEN`
+  cookie and send it back in the `X-XSRF-TOKEN` header. Otherwise the response is **403 Forbidden**.
+- `POST /logout` ends the session and the identity provider session.
+
+| Property | Environment variable | Description |
+|----------|---------------------|-------------|
+| `jtypo.oidc.issuer-uri` | `OIDC_ISSUER_URI` | Issuer URL, discovered on first login |
+| `jtypo.oidc.client-id` | `OIDC_CLIENT_ID` | Confidential client id |
+| `jtypo.oidc.client-secret` | `OIDC_CLIENT_SECRET` | Client secret |
+| `server.servlet.session.cookie.secure` | `SESSION_COOKIE_SECURE` | Must be `true` behind HTTPS |
+
+#### GET /api/me
+
+Returns the logged-in user.
+
+```json
+{ "id": "f3c1...", "username": "alice", "name": "Alice Dev", "email": "alice@example.com" }
+```
+
+### 2.2 Desktop mode (`local`)
+
+Set by the all-in-one JAR (`CombinedLauncher`): the API listens on `127.0.0.1` only and requires no
+authentication. `GET /api/me` returns **204 No Content**. Never use this mode on a server.
 
 ---
 
@@ -369,6 +397,7 @@ Used for streaming domain check results.
 | `screenshotBase64` | String | Yes | Base64-encoded PNG |
 | `homepageText` | String | Yes | First 200 chars of text |
 | `httpHeaders` | Object | Yes | Response headers map |
+| `tlsStatus` | String | No | Certificate check: `VALID`, `EXPIRED`, `HOSTNAME_MISMATCH`, `UNTRUSTED`, `HANDSHAKE_FAILED` or `NONE` (no HTTPS response) |
 
 ### 5.2 DomainPageDTO
 
