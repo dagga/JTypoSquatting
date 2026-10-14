@@ -1,8 +1,7 @@
 # GitHub Actions Workflow for JTypoSquatting
 # Builds and publishes the executable JAR on releases
 #
-# Note: JavaFX screenshot capture requires a display. In headless CI environments,
-# Xvfb (X Virtual Framebuffer) is used to provide a virtual display.
+# Note: screenshots use headless Chromium (Playwright), no display is required.
 
 name: Build and Release
 
@@ -33,34 +32,14 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Install Xvfb for headless JavaFX testing
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-
-    - name: Set up virtual display for JavaFX
-      run: |
-        # Start Xvfb on display :99
-        Xvfb :99 -screen 0 1280x1024x24 &
-        export DISPLAY=:99
-        echo "DISPLAY=:99" >> $GITHUB_ENV
-        echo "JavaFX configured with DISPLAY=:99"
-        sleep 2  # Wait for Xvfb to start
-
-    - name: Verify Xvfb is running
-      run: |
-        ps aux | grep Xvfb
-        echo "DISPLAY is: $DISPLAY"
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Run tests with Xvfb
-      run: |
-        # Run tests with virtual display
-        export DISPLAY=:99
-        echo "Running tests with DISPLAY=$DISPLAY"
-        ./gradlew test --no-daemon --info --stacktrace
+    - name: Install headless Chromium and its system dependencies
+      run: ./gradlew :backend:installPlaywrightBrowsers -PwithDeps --no-daemon
+
+    - name: Run tests
+      run: ./gradlew test --no-daemon --info --stacktrace
 
     - name: Upload test reports
       if: always()
@@ -87,32 +66,14 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Install Xvfb for headless JavaFX build
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-
-    - name: Set up virtual display for JavaFX
-      run: |
-        Xvfb :99 -screen 0 1280x1024x24 &
-        export DISPLAY=:99
-        echo "DISPLAY=:99" >> $GITHUB_ENV
-        echo "JavaFX configured with DISPLAY=:99"
-        sleep 2
-
-    - name: Verify Xvfb is running
-      run: |
-        ps aux | grep Xvfb
-        echo "DISPLAY is: $DISPLAY"
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: DISPLAY=:99 ./gradlew clean build --no-daemon
+      run: ./gradlew clean build -x test --no-daemon
 
     - name: Build optimized fat JAR
-      run: DISPLAY=:99 ./gradlew :frontend:fatJar --no-daemon
+      run: ./gradlew :frontend:fatJar --no-daemon
 
     - name: Get version from gradle.properties
       id: version

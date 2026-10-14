@@ -63,9 +63,10 @@ sudo apt install openjdk-21-jdk
 java -version
 ```
 
-### Pas de screenshots / Fenêtre JavaFX introuvable
+### Pas de screenshots
 
-- Vérifier que le JDK 21 inclut JavaFX (ou ajouter `--module-path` JavaFX)
+- Installer Chromium (une seule fois) : `./gradlew :backend:installPlaywrightBrowsers`
+- Si Chromium refuse de démarrer à cause du sandbox (namespaces utilisateur désactivés), passer `jtypo.screenshot.chromium-sandbox=false` uniquement dans un conteneur isolé
 - Consulter les logs backend dans l'onglet **Backend** de l'interface
 
 ---

@@ -2,6 +2,7 @@ package com.aleph.graymatter.jtyposquatting.service;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.security.OutboundPolicy;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -29,15 +30,19 @@ class PageAnalyzerFunctionalTest {
 
     private PageAnalyzer pageAnalyzer;
 
+    private PlaywrightScreenshotService screenshotService;
+
     @BeforeEach
     void setUp() {
-        boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-        if (isCI) {
-            // In CI, return dummy screenshot data
-            pageAnalyzer = new PageAnalyzer(url -> new byte[1024], new OutboundPolicy(false, java.util.Set.of(80, 443)));
-        } else {
-            pageAnalyzer = new PageAnalyzer(new JavaFXScreenshotService(), new OutboundPolicy(false, java.util.Set.of(80, 443)));
-        }
+        OutboundPolicy policy = new OutboundPolicy(false, java.util.Set.of(80, 443));
+        // Real headless Chromium; the screenshot is mandatory in CI and optional locally (browser may be missing)
+        screenshotService = new PlaywrightScreenshotService(policy, true, false, 15000, 1);
+        pageAnalyzer = new PageAnalyzer(screenshotService, policy);
+    }
+
+    @AfterEach
+    void tearDown() {
+        screenshotService.shutdown();
     }
 
     @Test
@@ -92,7 +97,7 @@ class PageAnalyzerFunctionalTest {
                 assertTrue(result.getScreenshot().length > 0, "Screenshot should have data");
                 System.out.println("Local Mode: Screenshot captured: " + result.getScreenshot().length + " bytes");
             } else {
-                System.out.println("Local Mode: Screenshot skipped (no display - install Xvfb to test screenshots)");
+                System.out.println("Local Mode: Screenshot skipped (run ./gradlew :backend:installPlaywrightBrowsers to test screenshots)");
             }
         }
     }

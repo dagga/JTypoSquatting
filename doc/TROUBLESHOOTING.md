@@ -208,41 +208,28 @@ ulimit -n 4096
 - Logs show: `PreviewPanel: No screenshot data available`
 
 **Causes:**
-1. HTTP code is not 200
-2. JavaFX runtime error
-3. Screenshot capture timeout
+1. HTTP code is not 2xx
+2. Chromium is not installed or cannot start
+3. The page, or one of its resources, targets a forbidden destination (anti-SSRF policy)
+4. Screenshot capture timeout
 
 **Solutions:**
 
 ```bash
 # 1. Check HTTP code in results table
-# Screenshots only captured for HTTP 200
+# Screenshots only captured for 2xx responses with visible text
 
-# 2. Check backend logs for JavaFX errors
-grep -i "javafx\|screenshot" /tmp/jtypo-backend.log
+# 2. Install headless Chromium (once)
+./gradlew :backend:installPlaywrightBrowsers
 
-# 3. Verify JavaFX is available
-java --list-modules | grep javafx
+# 3. Check backend logs
+grep -i "chromium\|screenshot\|blocked" /tmp/jtypo-backend.log
 
-# 4. Increase screenshot timeout
-# In PageAnalyzer.java, increase Thread.sleep(3000) to 5000
-```
+# 4. Chromium sandbox error (user namespaces disabled, e.g. Ubuntu 24.04 AppArmor):
+#    only inside an isolated container, set jtypo.screenshot.chromium-sandbox=false
 
-### Error: Black screenshots
-
-**Symptoms:**
-- Screenshot captured but image is black
-
-**Cause:** JavaFX rendering issue
-
-**Solutions:**
-
-```bash
-# Add JVM options for software rendering
-java -Dprism.order=sw -Dprism.vsync=false -jar JTypoSquatting.jar
-
-# Or disable hardware acceleration
-java -Dsun.java2d.opengl=false -jar JTypoSquatting.jar
+# 5. Increase screenshot timeout
+#    jtypo.screenshot.timeout-ms=30000
 ```
 
 ---
@@ -256,23 +243,16 @@ java -Dsun.java2d.opengl=false -jar JTypoSquatting.jar
 org.opentest4j.AssertionFailedError: Screenshot should not be null in CI environment
 ```
 
-**Cause:** JavaFX cannot capture screenshots without a display
+**Cause:** Chromium was not installed before running the tests
 
 **Solutions:**
 
 ```bash
-# In CI (GitHub Actions): Xvfb is auto-configured
-# Check workflow logs for Xvfb startup
+# In CI (GitHub Actions): the workflow runs
+./gradlew :backend:installPlaywrightBrowsers -PwithDeps
 
 # Locally (optional):
-# 1. Install Xvfb
-sudo apt install xvfb
-
-# 2. Start virtual display
-Xvfb :99 -screen 0 1280x1024x24 &
-export DISPLAY=:99
-
-# 3. Run tests
+./gradlew :backend:installPlaywrightBrowsers
 ./gradlew test
 
 # Tests are tolerant locally (pass without screenshot)
@@ -351,45 +331,6 @@ test {
    - Go to Actions tab
    - Select "Build and Release"
    - Click "Run workflow"
-
-### Error: "JavaFX configuration" warnings in CI
-
-**Symptoms:**
-```
-Prism ES2 Error - nInitialize: glXChooseFBConfig failed
-WARNING: Unsupported JavaFX configuration
-```
-
-**Cause:** Normal in headless environment with Xvfb
-
-**Solution:** No action needed - tests still pass. These are warnings, not errors.
-
-### Error: Xvfb fails to start in CI
-
-**Symptoms:**
-```
-Error: Cannot open display: :99
-```
-
-**Solutions:**
-
-```yaml
-# In GitHub Actions workflow:
-- name: Set up virtual display
-  run: |
-    sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-    Xvfb :99 -screen 0 1280x1024x24 &
-    export DISPLAY=:99
-    echo "DISPLAY=:99" >> $GITHUB_ENV
-    sleep 2  # Wait for Xvfb to start
-
-- name: Verify Xvfb
-  run: |
-    ps aux | grep Xvfb
-    echo "DISPLAY is: $DISPLAY"
-```
-
----
 
 ## 7. Performance Issues
 

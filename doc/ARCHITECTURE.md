@@ -184,7 +184,8 @@ Server-Sent Events enable real-time communication:
 | `TypoSquattingController` | Domain generation/checking endpoint | Spring Boot + Virtual Threads |
 | `DomainDataController` | Data management endpoints | Spring Boot |
 | `DomainCheckService` | Domain availability checking | Java HTTP Client |
-| `PageAnalyzer` | Web page analysis and screenshot | JavaFX WebView |
+| `PageAnalyzer` | Web page analysis (anti-SSRF HTTP client) | Apache HttpClient 5, JSoup |
+| `PlaywrightScreenshotService` | Screenshot capture | Playwright, headless Chromium |
 | `DatabaseService` | H2 database operations | JDBC |
 
 #### 4.2.3 Shared Module
@@ -473,14 +474,14 @@ Benefits:
 | **Concurrent Checks** | 100-1000 domains | Virtual threads |
 | **Memory per Thread** | ~1 KB | JVM monitoring |
 | **Response Time** | < 5 seconds per domain | SSE stream |
-| **Screenshot Capture** | < 3 seconds | JavaFX WebView |
+| **Screenshot Capture** | < 3 seconds | Headless Chromium (Playwright) |
 
 ### 9.3 Bottleneck Analysis
 
 | Component | Bottleneck | Mitigation |
 |-----------|------------|------------|
 | **Network** | DNS resolution, HTTP latency | Parallel checks with virtual threads |
-| **Screenshot** | JavaFX WebView initialization | Reuse WebView instances |
+| **Screenshot** | Chromium startup | Pool of reused browsers, one fresh context per capture |
 | **Memory** | Screenshot storage (BLOB) | Limit screenshot size, compression |
 | **Database** | Concurrent writes | H2 transaction management |
 
@@ -535,7 +536,7 @@ Option 2: Native Installer (jpackage)
 | **AD-001** | Use Java 21 with Virtual Threads | High concurrency for I/O bound domain checks | Requires JDK 21+, simpler code |
 | **AD-002** | Client-Server with SSE | Real-time updates, clean separation | Two processes to manage |
 | **AD-003** | H2 Embedded Database | No external database setup, portable | Limited to single-user |
-| **AD-004** | JavaFX for Screenshots | Full browser rendering (JavaScript support) | JavaFX runtime required |
+| **AD-004** | ~~JavaFX for Screenshots~~ → headless Chromium (Playwright) | Faithful rendering, no display required, per-request anti-SSRF filtering | Chromium must be installed; superseded JavaFX WebView in plan P1.3 |
 | **AD-005** | Fat JAR distribution | Single file deployment, no installation | Larger file size (32 MB) |
 | **AD-006** | Swing for UI | Mature, stable, no additional dependencies | Less modern look than JavaFX |
 
@@ -554,7 +555,7 @@ Option 2: Native Installer (jpackage)
 
 | Aspect | Swing | JavaFX |
 |--------|-------|--------|
-| **Dependencies** | Built-in | External (already used for screenshots) |
+| **Dependencies** | Built-in | External |
 | **Look & Feel** | Native OS | Customizable |
 | **Learning Curve** | Low | Medium |
 | **Decision** | ✅ Selected | Not selected for UI |

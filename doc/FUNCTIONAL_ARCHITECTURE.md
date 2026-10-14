@@ -409,7 +409,7 @@ Status Determination:
 Function: captureScreenshot(domain: String) → byte[]
 
 Process:
-1. Create JavaFX WebView (headless)
+1. Open a fresh headless Chromium context (Playwright)
 2. Load domain URL
 3. Wait for page load + JavaScript execution (3 seconds)
 4. Capture rendered image
@@ -579,7 +579,7 @@ Error Handling:
 Function: renderPage(domain: String) → Image
 
 Process:
-1. JavaFX WebView loads URL
+1. Headless Chromium loads URL (each request checked by the anti-SSRF policy)
 2. Wait for document complete
 3. Additional 3-second wait for JavaScript
 4. Capture viewport image
@@ -729,7 +729,7 @@ Recovery: Continue with other domains
 #### E-003: Screenshot Failure
 
 ```
-Condition: JavaFX WebView error
+Condition: Chromium error or blocked destination
 Action: Store null screenshot, continue
 Recovery: Domain still usable without screenshot
 ```
