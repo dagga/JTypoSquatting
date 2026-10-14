@@ -24,6 +24,7 @@ This directory contains complete documentation for JTypoSquatting.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Software architecture (components, patterns, technology) | Architects, Developers |
 | [FUNCTIONAL_ARCHITECTURE.md](FUNCTIONAL_ARCHITECTURE.md) | Functional architecture (use cases, business logic) | Analysts, Product Owners |
 | [audit.md](audit.md) | Audit de code approfondi, analyse de sécurité, concurrence et plan de remédiation | Développeurs, Sécurité, QA |
+| [plan-action.md](plan-action.md) | Plan d'action : évolution vers un service web public multi-utilisateurs (Next.js, MySQL, sécurité) | Tech Leads, Développeurs, DevOps |
 
 ### Technical Reference
 
