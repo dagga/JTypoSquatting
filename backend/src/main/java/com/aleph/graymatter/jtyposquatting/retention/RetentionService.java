@@ -1,6 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.retention;
 
-import com.aleph.graymatter.jtyposquatting.storage.ScreenshotStore;
+import com.aleph.graymatter.jtyposquatting.storage.ScreenshotGarbageCollector;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,24 +33,24 @@ public class RetentionService {
     private static final int BATCH = 200;
 
     private final JdbcTemplate jdbc;
-    private final ScreenshotStore screenshots;
+    private final ScreenshotGarbageCollector garbageCollector;
     private final MeterRegistry meters;
     private final Duration scanRetention;
     private final Duration checkRetention;
     private final int maxScansPerRun;
     private final Clock clock;
 
-    public RetentionService(JdbcTemplate jdbc, ScreenshotStore screenshots, MeterRegistry meters,
+    public RetentionService(JdbcTemplate jdbc, ScreenshotGarbageCollector garbageCollector, MeterRegistry meters,
                             @Value("${jtypo.retention.scan-days:90}") int scanDays,
                             @Value("${jtypo.retention.check-days:30}") int checkDays,
                             @Value("${jtypo.retention.max-scans-per-run:5000}") int maxScansPerRun) {
-        this(jdbc, screenshots, meters, Duration.ofDays(scanDays), Duration.ofDays(checkDays), maxScansPerRun, Clock.systemUTC());
+        this(jdbc, garbageCollector, meters, Duration.ofDays(scanDays), Duration.ofDays(checkDays), maxScansPerRun, Clock.systemUTC());
     }
 
-    RetentionService(JdbcTemplate jdbc, ScreenshotStore screenshots, MeterRegistry meters, Duration scanRetention,
+    RetentionService(JdbcTemplate jdbc, ScreenshotGarbageCollector garbageCollector, MeterRegistry meters, Duration scanRetention,
                      Duration checkRetention, int maxScansPerRun, Clock clock) {
         this.jdbc = jdbc;
-        this.screenshots = screenshots;
+        this.garbageCollector = garbageCollector;
         this.meters = meters;
         this.scanRetention = scanRetention;
         this.checkRetention = checkRetention;
@@ -64,7 +64,7 @@ public class RetentionService {
         Set<String> candidateScreenshots = new LinkedHashSet<>();
         int scans = purgeScans(Timestamp.from(now.minus(scanRetention)), candidateScreenshots);
         int checks = purgeChecks(Timestamp.from(now.minus(checkRetention)), candidateScreenshots);
-        int files = purgeOrphanScreenshots(candidateScreenshots);
+        int files = garbageCollector.deleteUnreferenced(candidateScreenshots);
         meters.counter("jtypo.retention.deleted", "type", "scans").increment(scans);
         meters.counter("jtypo.retention.deleted", "type", "checks").increment(checks);
         meters.counter("jtypo.retention.deleted", "type", "screenshots").increment(files);
@@ -96,25 +96,5 @@ public class RetentionService {
                 "SELECT DISTINCT screenshot_key FROM domain_checks WHERE screenshot_key IS NOT NULL AND checked_at < ?",
                 String.class, before));
         return jdbc.update("DELETE FROM domain_checks WHERE checked_at < ?", before);
-    }
-
-    /** Deletes the screenshots of deleted rows that no other scan result nor cached check references. */
-    private int purgeOrphanScreenshots(Set<String> candidates) {
-        int deleted = 0;
-        for (String key : candidates) {
-            Integer references = jdbc.queryForObject("""
-                    SELECT (SELECT COUNT(*) FROM scan_results WHERE screenshot_key = ?)
-                         + (SELECT COUNT(*) FROM domain_checks WHERE screenshot_key = ?)
-                    """, Integer.class, key, key);
-            if (references != null && references == 0) {
-                try {
-                    screenshots.delete(key);
-                    deleted++;
-                } catch (RuntimeException e) {
-                    logger.warn("Could not delete screenshot {}: {}", key, e.getMessage());
-                }
-            }
-        }
-        return deleted;
     }
 }

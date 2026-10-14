@@ -1,5 +1,6 @@
 package com.aleph.graymatter.jtyposquatting.retention;
 
+import com.aleph.graymatter.jtyposquatting.storage.ScreenshotGarbageCollector;
 import com.aleph.graymatter.jtyposquatting.storage.ScreenshotStore;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.DisplayName;
@@ -72,7 +73,7 @@ class RetentionServiceTest {
         check("old-check.example", onlyInOldCheck, Duration.ofDays(40));
         check("fresh-check.example", shared, Duration.ofDays(1));
 
-        new RetentionService(jdbc, store, meters, Duration.ofDays(90), Duration.ofDays(30), 1000,
+        new RetentionService(jdbc, new ScreenshotGarbageCollector(jdbc, store), meters, Duration.ofDays(90), Duration.ofDays(30), 1000,
                 Clock.fixed(NOW, ZoneOffset.UTC)).purge();
 
         assertEquals(0, count("SELECT COUNT(*) FROM scans WHERE id = 'old-done'"));

@@ -71,7 +71,7 @@
   },
   "Privacy": {
     "title": "Privacy",
-    "body": "We keep your identifier, your e-mail address and the history of your scans, to provide the service. Retention periods and how to exercise your rights: to be completed before going live."
+    "body": "We keep your identifier, your e-mail address and the history of your scans, to provide the service. Scans are deleted after 90 days. You can export your data or delete your account at any time from \"My scans › My data\". Data controller and contact: to be completed before going live."
   },
   "App": {
     "title": "My scans",
@@ -163,5 +163,17 @@
   "NotFound": {
     "title": "Page not found",
     "back": "Back to home"
+  },
+  "Account": {
+    "title": "My data",
+    "export": "Export my data (JSON)",
+    "exportHelp": "Your profile, your scans and their results, in a reusable format.",
+    "delete": "Delete my account",
+    "deleteHelp": "Permanently erases your account, your scans and the screenshots nobody else uses.",
+    "confirmTitle": "Permanently delete your account?",
+    "confirmBody": "Your scans and their results will be erased. This cannot be undone. Your identity provider account is managed separately.",
+    "confirm": "Delete permanently",
+    "cancel": "Cancel",
+    "error": "Deletion failed. Please try again later."
   }
 }

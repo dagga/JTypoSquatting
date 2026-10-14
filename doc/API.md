@@ -101,6 +101,14 @@ Returns the logged-in user.
 { "id": "f3c1...", "username": "alice", "name": "Alice Dev", "email": "alice@example.com" }
 ```
 
+#### GET /api/me/export — DELETE /api/me
+
+- `GET /api/me/export`: everything stored about the user (profile, scans, results), as a JSON attachment
+  (GDPR access and portability).
+- `DELETE /api/me` (CSRF header required): deletes the profile, scans, results and the screenshots no
+  other user needs, and ends the other sessions of the user; **204**. The frontend then calls
+  `POST /logout` to end the current session and the identity provider session.
+
 Security headers on every response: `Content-Security-Policy` (`default-src 'none'`), `Referrer-Policy`,
 `Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options` and, over HTTPS, `Strict-Transport-Security`.
 CORS is disabled: the frontend and the API are served from the same origin by the reverse proxy.
