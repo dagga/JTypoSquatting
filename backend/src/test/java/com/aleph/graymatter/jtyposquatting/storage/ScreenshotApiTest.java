@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Captures : conservées dans le stockage objet lors d'une vérification, servies uniquement au propriétaire.
+ * Screenshots: kept in the object storage during a check, served to the owner only.
  */
 @SpringBootTest(properties = "jtypo.storage.directory=${java.io.tmpdir}/jtypo-test-${random.uuid}")
 @AutoConfigureMockMvc
@@ -50,7 +50,7 @@ class ScreenshotApiTest {
     private DomainCheckService domainCheckService;
 
     @Test
-    @DisplayName("La capture est stockée hors base et servie au seul propriétaire de l'analyse")
+    @DisplayName("The screenshot is stored outside the database and served to the scan owner only")
     void testScreenshotStoredAndProtected() throws Exception {
         when(domainCheckService.analyze("shot-test.com")).thenReturn(
                 new DomainResultDTO("shot-test.com", DomainStatus.SUSPICIOUS, "T", "", "", 200, PNG, "", null));

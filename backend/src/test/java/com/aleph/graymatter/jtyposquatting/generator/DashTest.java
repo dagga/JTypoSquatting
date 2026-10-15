@@ -9,28 +9,28 @@ import java.util.ArrayList;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour Dash — vérification de l'insertion / suppression de tirets,
- * et correction du bug "leading dot" sur les domaines sans sous-domaine.
+ * Unit tests of Dash: insertion and removal of dashes, and fix of the "leading dot" bug on domains
+ * without a subdomain.
  */
 class DashTest {
 
     // ---------------------------------------------------------------
-    // addDash — domaine sans sous-domaine
+    // addDash: domain without a subdomain
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("addDash génère N-1 variantes pour un domaine de N caractères")
+    @DisplayName("addDash generates N-1 variants for a domain of N characters")
     void testAddDashCountVariants() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Dash.addDash(dn, result);
 
-        // "example" a 7 caractères → 6 positions d'insertion possibles
+        // "example" has 7 characters → 6 possible insertion positions
         assertEquals(6, result.size());
     }
 
     @Test
-    @DisplayName("addDash ne génère pas de domaine avec un point en tête (régression bug leading dot)")
+    @DisplayName("addDash never generates a domain starting with a dot (leading dot regression)")
     void testAddDashNoLeadingDot() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -39,20 +39,20 @@ class DashTest {
         for (DomainName variant : result) {
             String s = variant.toString();
             assertFalse(s.startsWith("."),
-                    "Le domaine ne doit pas commencer par un point : " + s);
+                    "The domain must not start with a dot: " + s);
             assertTrue(s.endsWith(".com"),
-                    "Le domaine doit se terminer par .com : " + s);
+                    "The domain must end with .com: " + s);
         }
     }
 
     @Test
-    @DisplayName("addDash avec sous-domaine — le sous-domaine est préservé")
+    @DisplayName("addDash with a subdomain: the subdomain is preserved")
     void testAddDashPreservesSubdomain() throws Exception {
         DomainName dn = new DomainName("www.example.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Dash.addDash(dn, result);
 
-        // Tous les résultats doivent commencer par "www."
+        // Every result must start with "www."
         for (DomainName variant : result) {
             String s = variant.toString();
             assertTrue(s.startsWith("www."),
@@ -61,7 +61,7 @@ class DashTest {
     }
 
     @Test
-    @DisplayName("addDash produit les variantes attendues pour 'abc.com'")
+    @DisplayName("addDash produces the expected variants for 'abc.com'")
     void testAddDashExactVariants() throws Exception {
         DomainName dn = new DomainName("abc.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -78,7 +78,7 @@ class DashTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("removeDash supprime un tiret et produit le domaine sans tiret")
+    @DisplayName("removeDash removes the dash and produces the domain without it")
     void testRemoveDash() throws Exception {
         DomainName dn = new DomainName("ex-ample.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -89,7 +89,7 @@ class DashTest {
     }
 
     @Test
-    @DisplayName("removeDash ne produit rien si pas de tiret")
+    @DisplayName("removeDash produces nothing when there is no dash")
     void testRemoveDashNoDash() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -99,7 +99,7 @@ class DashTest {
     }
 
     @Test
-    @DisplayName("removeDash supprime tous les tirets en une seule fois")
+    @DisplayName("removeDash removes all dashes at once")
     void testRemoveDashMultiple() throws Exception {
         DomainName dn = new DomainName("e-x-a-mple.com");
         ArrayList<DomainName> result = new ArrayList<>();

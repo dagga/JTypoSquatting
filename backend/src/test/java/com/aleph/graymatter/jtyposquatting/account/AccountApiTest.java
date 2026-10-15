@@ -29,7 +29,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Droits RGPD : export des données de l'utilisateur et suppression de son compte.
+ * GDPR rights: export of the user's data and deletion of their account.
  */
 @SpringBootTest(properties = {"jtypo.storage.directory=${java.io.tmpdir}/jtypo-account-${random.uuid}",
         "jtypo.quota.max-concurrent-scans=10"})
@@ -64,7 +64,7 @@ class AccountApiTest {
     }
 
     @Test
-    @DisplayName("L'export contient le profil, les analyses et les résultats de l'utilisateur, et rien d'autre")
+    @DisplayName("The export contains the profile, scans and results of the user, and nothing else")
     void testExport() throws Exception {
         Scan mine = scanWithResult("export-user", "mine-export.com", null);
         Scan other = scanWithResult("other-export-user", "other-export.com", null);
@@ -80,7 +80,7 @@ class AccountApiTest {
     }
 
     @Test
-    @DisplayName("La suppression efface le compte, ses analyses et ses captures non partagées, et elles seules")
+    @DisplayName("Deletion erases the account, its scans and its unshared screenshots, and nothing else")
     void testDeleteAccount() throws Exception {
         String own = store.put(new byte[]{10, 20, 30});
         String shared = store.put(new byte[]{40, 50, 60});
@@ -93,8 +93,8 @@ class AccountApiTest {
 
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE id = 'leaving-user'", Integer.class));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM scans WHERE user_id = 'leaving-user'", Integer.class));
-        assertTrue(store.get(own).isEmpty(), "capture propre à l'utilisateur supprimée");
-        assertTrue(store.get(shared).isPresent(), "capture utilisée par un autre utilisateur conservée");
+        assertTrue(store.get(own).isEmpty(), "screenshot of this user only: deleted");
+        assertTrue(store.get(shared).isPresent(), "screenshot used by another user: kept");
         assertEquals(1, results.countByScan(kept.id()));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE id = 'staying-user'", Integer.class));
     }

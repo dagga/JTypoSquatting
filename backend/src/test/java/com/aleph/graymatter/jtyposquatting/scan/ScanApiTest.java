@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * API des analyses : création, cloisonnement par utilisateur, quotas persistants.
+ * Scan API: creation, isolation between users, persistent quotas.
  */
 @SpringBootTest(properties = {"jtypo.quota.max-concurrent-scans=2", "jtypo.quota.scans-per-day=3"})
 @AutoConfigureMockMvc
@@ -42,7 +42,7 @@ class ScanApiTest {
     }
 
     @Test
-    @DisplayName("Une analyse est mise en file (202) et stocke le domaine en punycode")
+    @DisplayName("A scan is queued (202) and stores the domain in punycode")
     void testCreateScan() throws Exception {
         mvc.perform(post("/api/scans").with(user("creator")).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -54,7 +54,7 @@ class ScanApiTest {
     }
 
     @Test
-    @DisplayName("Un domaine invalide est refusé (400)")
+    @DisplayName("An invalid domain is rejected (400)")
     void testInvalidDomain() throws Exception {
         mvc.perform(post("/api/scans").with(user("invalid")).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -64,7 +64,7 @@ class ScanApiTest {
     }
 
     @Test
-    @DisplayName("Un utilisateur ne voit ni les analyses ni les résultats d'un autre (403)")
+    @DisplayName("A user sees neither the scans nor the results of another user (403)")
     void testOwnership() throws Exception {
         String scanId = createScan("owner", "example.com");
 
@@ -78,11 +78,11 @@ class ScanApiTest {
     }
 
     @Test
-    @DisplayName("Les quotas sont calculés depuis la base : analyses actives puis quota journalier")
+    @DisplayName("Quotas are computed from the database: active scans, then daily quota")
     void testPersistentQuotas() throws Exception {
         createScan("quota", "example.com");
         createScan("quota", "example.org");
-        // Deux analyses en attente : la troisième dépasse le nombre d'analyses simultanées
+        // Two pending scans: the third one exceeds the number of simultaneous scans
         mvc.perform(post("/api/scans").with(user("quota")).with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"baseDomain\":\"example.net\"}"))
@@ -91,7 +91,7 @@ class ScanApiTest {
     }
 
     @Test
-    @DisplayName("Le quota journalier tient compte des analyses terminées")
+    @DisplayName("The daily quota counts finished scans too")
     void testDailyQuota(@Autowired ScanRepository scans) throws Exception {
         for (String domain : new String[]{"a-example.com", "b-example.com", "c-example.com"}) {
             String id = createScan("daily", domain);

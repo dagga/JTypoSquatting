@@ -13,8 +13,8 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour Misspell — vérification que le correctif KeysValuesSwapMulti
- * préserve TOUTES les fautes pour un même mot cible (régression Point 6).
+ * Unit tests of Misspell: the KeysValuesSwapMulti fix keeps ALL the misspellings of a word
+ * (audit point 6 regression).
  */
 class MisspellTest {
 
@@ -22,68 +22,68 @@ class MisspellTest {
 
     @BeforeAll
     static void loadMap() {
-        // Charge le dictionnaire une seule fois pour tous les tests
+        // Loads the dictionary once for all the tests
         misspellingsMap = Misspell.loadMisspellings();
     }
 
     // ---------------------------------------------------------------
-    // Tests sur le dictionnaire chargé
+    // Tests of the loaded dictionary
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("Le dictionnaire est non-null et non-vide")
+    @DisplayName("The dictionary is neither null nor empty")
     void testDictionaryNotEmpty() {
         assertNotNull(misspellingsMap);
         assertFalse(misspellingsMap.isEmpty(),
-                "Le dictionnaire de fautes ne doit pas être vide");
+                "The misspelling dictionary must not be empty");
     }
 
     @Test
-    @DisplayName("Chaque clé mappe vers une liste non-vide de fautes")
+    @DisplayName("Each key maps to a non-empty list of misspellings")
     void testEachKeyHasNonEmptyList() {
         for (Map.Entry<String, List<String>> e : misspellingsMap.entrySet()) {
             assertNotNull(e.getValue(),
-                    "Liste null pour la clé : " + e.getKey());
+                    "Null list for key: " + e.getKey());
             assertFalse(e.getValue().isEmpty(),
-                    "Liste vide pour la clé : " + e.getKey());
+                    "Empty list for key: " + e.getKey());
         }
     }
 
     @Test
-    @DisplayName("Point 6 — Les listes contiennent plusieurs entrées si le JSON original en avait")
+    @DisplayName("Audit point 6: lists keep several entries when the original JSON had several")
     void testMultipleMisspellingsPreserved() {
-        // On cherche un mot dont le dictionnaire contient au moins 2 fautes
-        // (vérifie que KeysValuesSwapMulti ne tronque pas les doublons)
+        // Looks for a word with at least 2 misspellings in the dictionary
+        // (checks that KeysValuesSwapMulti does not drop duplicates)
         long wordsWithMultipleMisspellings = misspellingsMap.values().stream()
                 .filter(list -> list.size() > 1)
                 .count();
 
-        // Dans le dictionnaire commun-misspellings, de nombreux mots ont plusieurs fautes
+        // In the common-misspellings dictionary, many words have several misspellings
         assertTrue(wordsWithMultipleMisspellings > 0,
-                "Aucun mot ne contient plusieurs fautes dans le dictionnaire inversé — "
-                        + "KeysValuesSwapMulti a peut-être tronqué les données");
+                "No word has several misspellings in the inverted dictionary: "
+                        + "KeysValuesSwapMulti may have truncated the data");
     }
 
     @Test
-    @DisplayName("Aucune faute n'est dupliquée dans la liste pour une même clé")
+    @DisplayName("No misspelling is duplicated in the list of a key")
     void testNoDuplicateMisspellings() {
         for (Map.Entry<String, List<String>> e : misspellingsMap.entrySet()) {
             List<String> values = e.getValue();
             long distinctCount = values.stream().distinct().count();
             assertEquals(values.size(), distinctCount,
-                    "Des fautes dupliquées existent pour la clé '" + e.getKey() + "' : " + values);
+                    "Duplicate misspellings for key '" + e.getKey() + "': " + values);
         }
     }
 
     // ---------------------------------------------------------------
-    // Tests sur AddMisspelledDomains
+    // Tests of AddMisspelledDomains
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("AddMisspelledDomains retourne des variantes pour un domaine contenant un mot du dictionnaire")
+    @DisplayName("AddMisspelledDomains returns variants for a domain containing a dictionary word")
     void testAddMisspelledDomainsProducesVariants() throws Exception {
-        // "the" est souvent dans le dictionnaire de fautes
-        // On cherche un mot clé présent dans la map
+        // "the" is often in the misspelling dictionary
+        // Looks for a key present in the map
         String targetWord = misspellingsMap.keySet().iterator().next();
         DomainName dn = new DomainName(targetWord + ".com");
 
@@ -91,23 +91,23 @@ class MisspellTest {
         Misspell.AddMisspelledDomains(dn, result);
 
         assertFalse(result.isEmpty(),
-                "Aucune variante générée pour le domaine contenant '" + targetWord + "'");
+                "No variant generated for the domain containing '" + targetWord + "'");
     }
 
     @Test
-    @DisplayName("AddMisspelledDomains retourne liste vide pour un domaine sans correspondance")
+    @DisplayName("AddMisspelledDomains returns an empty list for a domain without any match")
     void testAddMisspelledDomainsEmptyForUnknownDomain() throws Exception {
-        // "zzzzzzz" est très improbable dans le dictionnaire
+        // "zzzzzzz" is very unlikely to be in the dictionary
         DomainName dn = new DomainName("zzzzzzz.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Misspell.AddMisspelledDomains(dn, result);
 
         assertTrue(result.isEmpty(),
-                "Des variantes ont été générées pour un domaine inconnu");
+                "Variants were generated for an unknown domain");
     }
 
     @Test
-    @DisplayName("AddMisspelledDomains — aucun doublon dans les résultats")
+    @DisplayName("AddMisspelledDomains: no duplicate in the results")
     void testAddMisspelledDomainsNoDuplicates() throws Exception {
         String targetWord = misspellingsMap.keySet().iterator().next();
         DomainName dn = new DomainName(targetWord + ".com");
@@ -117,11 +117,11 @@ class MisspellTest {
 
         List<String> strings = result.stream().map(DomainName::toString).collect(Collectors.toList());
         long distinct = strings.stream().distinct().count();
-        assertEquals(strings.size(), distinct, "Des doublons ont été générés");
+        assertEquals(strings.size(), distinct, "Duplicates were generated");
     }
 
     @Test
-    @DisplayName("AddMisspelledDomains — le TLD original est préservé dans les variantes")
+    @DisplayName("AddMisspelledDomains: the original TLD is kept in the variants")
     void testAddMisspelledDomainsTLDPreserved() throws Exception {
         String targetWord = misspellingsMap.keySet().iterator().next();
         DomainName dn = new DomainName(targetWord + ".fr");
@@ -131,7 +131,7 @@ class MisspellTest {
 
         for (DomainName variant : result) {
             assertEquals("fr", variant.getTLD(),
-                    "Le TLD a changé dans la variante : " + variant);
+                    "The TLD changed in variant: " + variant);
         }
     }
 }

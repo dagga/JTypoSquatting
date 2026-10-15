@@ -12,39 +12,38 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour Homoglyph — génération de variantes homoglyphes.
+ * Unit tests of Homoglyph: generation of look-alike variants.
  */
 class HomoglyphTest {
 
     @Test
-    @DisplayName("Domaine sans caractère homoglyphe → liste vide")
+    @DisplayName("Domain without any look-alike character → empty list")
     void testNoHomoglyphCharacters() throws Exception {
-        // Si aucun caractère de "xyz.com" n'a de substitut dans Const.SIMILAR_CHAR
-        // La liste reste vide. On choisit un domaine dont les caractères ne sont PAS dans la map.
-        // (On teste que la méthode ne plante pas et respecte la logique de filtrage.)
+        // If no character of "xyz.com" has a substitute in Const.SIMILAR_CHAR, the list stays empty.
+        // (Checks that the method does not fail and follows the filtering logic.)
         DomainName dn = new DomainName("xyz.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Homoglyph.addHomglyphedDomains(dn, result);
-        // Le résultat dépend de la map, on vérifie juste l'absence d'exception
+        // The result depends on the map: only checks that no exception is thrown
         assertNotNull(result);
     }
 
     @Test
-    @DisplayName("Domaine 'google.com' — génère des variantes si 'g','o','l','e' ont des substituts")
+    @DisplayName("'google.com' generates variants when 'g', 'o', 'l', 'e' have substitutes")
     void testGoogleGeneratesVariants() throws Exception {
         DomainName dn = new DomainName("google.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Homoglyph.addHomglyphedDomains(dn, result);
 
-        // Vérifie que les variantes contiennent '.com'
+        // Variants keep '.com'
         for (DomainName variant : result) {
             assertTrue(variant.toString().endsWith(".com"),
-                    "Variante sans .com : " + variant);
+                    "Variant without .com: " + variant);
         }
     }
 
     @Test
-    @DisplayName("Tous les domaines générés sont uniques")
+    @DisplayName("All generated domains are unique")
     void testNoDuplicates() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -55,11 +54,11 @@ class HomoglyphTest {
                 .collect(Collectors.toSet());
 
         assertEquals(result.size(), unique.size(),
-                "Des doublons ont été détectés dans les résultats");
+                "Duplicates found in the results");
     }
 
     @Test
-    @DisplayName("Aucune variante n'est identique au domaine original")
+    @DisplayName("No variant is identical to the original domain")
     void testVariantsDifferFromOriginal() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -67,15 +66,15 @@ class HomoglyphTest {
 
         for (DomainName variant : result) {
             assertNotEquals("example.com", variant.toString(),
-                    "La variante est identique au domaine original");
+                    "The variant is identical to the original domain");
         }
     }
 
     @Test
-    @DisplayName("Caractère 'o' → si substitut présent, 'google' génère un remplacement de 'o'")
+    @DisplayName("When 'o' has a substitute, 'google' generates a replacement of 'o'")
     void testCharacterOReplacedIfSubstituteExists() throws Exception {
         if (!Const.SIMILAR_CHAR.containsKey('o')) {
-            // Test conditionnel : si 'o' n'est pas dans la map, on passe
+            // Conditional test: skipped when 'o' is not in the map
             return;
         }
 
@@ -83,22 +82,21 @@ class HomoglyphTest {
         ArrayList<DomainName> result = new ArrayList<>();
         Homoglyph.addHomglyphedDomains(dn, result);
 
-        // "google" contient 3 'o', donc on doit avoir au moins autant de variantes
-        // que de substituts * occurrences
-        assertFalse(result.isEmpty(), "Aucune variante générée pour 'google.com' alors que 'o' a des substituts");
+        // "google" contains 3 'o': there must be at least as many variants as substitutes * occurrences
+        assertFalse(result.isEmpty(), "No variant generated for 'google.com' although 'o' has substitutes");
     }
 
     @Test
-    @DisplayName("Le TLD n'est pas touché par la substitution homoglyphe")
+    @DisplayName("The TLD is not changed by the look-alike substitution")
     void testTLDNotAlteredByHomoglyph() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
         Homoglyph.addHomglyphedDomains(dn, result);
 
-        // Toutes les variantes doivent avoir le même TLD que l'original
+        // Every variant must keep the TLD of the original
         for (DomainName variant : result) {
             assertEquals("com", variant.getTLD(),
-                    "Le TLD a été modifié : " + variant);
+                    "The TLD was changed: " + variant);
         }
     }
 }

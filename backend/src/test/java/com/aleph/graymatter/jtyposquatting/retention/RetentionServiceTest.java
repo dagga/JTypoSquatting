@@ -19,7 +19,7 @@ import java.time.ZoneOffset;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Purge des données anciennes : analyses terminées, cache, captures devenues orphelines.
+ * Purge of old data: finished scans, cache, screenshots no longer referenced.
  */
 @SpringBootTest(properties = "jtypo.storage.directory=${java.io.tmpdir}/jtypo-retention-${random.uuid}")
 @ActiveProfiles("test")
@@ -56,7 +56,7 @@ class RetentionServiceTest {
     }
 
     @Test
-    @DisplayName("Seules les données expirées et les captures plus référencées sont supprimées")
+    @DisplayName("Only expired data and unreferenced screenshots are deleted")
     void testPurge() {
         jdbc.update("INSERT INTO users (id, username) VALUES ('retention-user', 'r')");
         String shared = store.put(new byte[]{1, 2, 3});
@@ -77,14 +77,14 @@ class RetentionServiceTest {
                 Clock.fixed(NOW, ZoneOffset.UTC)).purge();
 
         assertEquals(0, count("SELECT COUNT(*) FROM scans WHERE id = 'old-done'"));
-        assertEquals(0, count("SELECT COUNT(*) FROM scan_results WHERE scan_id = 'old-done'"), "résultats supprimés en cascade");
-        assertEquals(1, count("SELECT COUNT(*) FROM scans WHERE id = 'old-running'"), "une analyse en cours n'est jamais purgée");
+        assertEquals(0, count("SELECT COUNT(*) FROM scan_results WHERE scan_id = 'old-done'"), "results deleted by cascade");
+        assertEquals(1, count("SELECT COUNT(*) FROM scans WHERE id = 'old-running'"), "a running scan is never purged");
         assertEquals(1, count("SELECT COUNT(*) FROM scans WHERE id = 'recent'"));
         assertEquals(0, count("SELECT COUNT(*) FROM domain_checks WHERE domain = 'old-check.example'"));
         assertEquals(1, count("SELECT COUNT(*) FROM domain_checks WHERE domain = 'fresh-check.example'"));
 
-        assertTrue(store.get(shared).isPresent(), "capture encore référencée : conservée");
-        assertTrue(store.get(onlyInOldScan).isEmpty(), "capture orpheline : supprimée");
-        assertTrue(store.get(onlyInOldCheck).isEmpty(), "capture orpheline : supprimée");
+        assertTrue(store.get(shared).isPresent(), "screenshot still referenced: kept");
+        assertTrue(store.get(onlyInOldScan).isEmpty(), "orphan screenshot: deleted");
+        assertTrue(store.get(onlyInOldCheck).isEmpty(), "orphan screenshot: deleted");
     }
 }

@@ -67,7 +67,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Anti-SSRF : une adresse interne n'est jamais contactée avec la politique stricte")
+    @DisplayName("Anti-SSRF: an internal address is never contacted with the strict policy")
     void testAnalyzePage_BlocksPrivateAddress(WireMockRuntimeInfo wmRuntimeInfo) {
         stubFor(get(urlEqualTo("/internal")).willReturn(aResponse().withStatus(200).withBody("<html>secret</html>")));
         PageAnalyzer strict = new PageAnalyzer(url -> new byte[0], new OutboundPolicy(false, java.util.Set.of()));
@@ -79,7 +79,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Anti-SSRF : un port non autorisé est refusé")
+    @DisplayName("Anti-SSRF: a port that is not allowed is refused")
     void testAnalyzePage_BlocksPort(WireMockRuntimeInfo wmRuntimeInfo) {
         stubFor(get(urlEqualTo("/port")).willReturn(aResponse().withStatus(200)));
         PageAnalyzer strictPorts = new PageAnalyzer(url -> new byte[0], new OutboundPolicy(true, java.util.Set.of(80, 443)));
@@ -91,7 +91,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Les redirections sont suivies et revalidées à chaque saut")
+    @DisplayName("Redirects are followed and checked again at each hop")
     void testAnalyzePage_FollowsAndChecksRedirects(WireMockRuntimeInfo wmRuntimeInfo) {
         stubFor(get(urlEqualTo("/old")).willReturn(aResponse().withStatus(301).withHeader("Location", "/new")));
         stubFor(get(urlEqualTo("/new")).willReturn(aResponse().withStatus(200).withBody("<html><title>New</title></html>")));
@@ -106,7 +106,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Une boucle de redirections est interrompue")
+    @DisplayName("A redirect loop is stopped")
     void testAnalyzePage_RedirectLoop(WireMockRuntimeInfo wmRuntimeInfo) {
         stubFor(get(urlEqualTo("/loop")).willReturn(aResponse().withStatus(302).withHeader("Location", "/loop")));
 
@@ -117,7 +117,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("TLS : un certificat auto-signé est signalé UNTRUSTED au lieu d'être accepté")
+    @DisplayName("TLS: a self-signed certificate is reported UNTRUSTED instead of being accepted")
     void testAnalyzePage_SelfSignedCertificate(WireMockRuntimeInfo wmRuntimeInfo) {
         stubFor(get(urlEqualTo("/tls")).willReturn(aResponse().withStatus(200).withBody("<html>tls</html>")));
 
@@ -128,7 +128,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Le corps de réponse est tronqué à 2 Mo")
+    @DisplayName("The response body is truncated to 2 MB")
     void testAnalyzePage_BodySizeLimit(WireMockRuntimeInfo wmRuntimeInfo) {
         String big = "<html><body>" + "a".repeat(3 * 1024 * 1024) + "</body></html>";
         stubFor(get(urlEqualTo("/big")).willReturn(aResponse().withStatus(200).withBody(big)));
@@ -140,7 +140,7 @@ class PageAnalyzerUnitTest {
     }
 
     @Test
-    @DisplayName("Un domaine internationalisé (homoglyphe) est contacté sous sa forme punycode")
+    @DisplayName("An internationalised (homoglyph) domain is contacted in its punycode form")
     void testAnalyzePage_InternationalizedDomain() {
         java.util.List<String> checkedHosts = new java.util.ArrayList<>();
         OutboundPolicy recordingPolicy = new OutboundPolicy(true, java.util.Set.of()) {
@@ -152,7 +152,7 @@ class PageAnalyzerUnitTest {
         };
         PageAnalyzer analyzer = new PageAnalyzer(url -> new byte[0], recordingPolicy);
 
-        // "е" cyrillique ; ".invalid" ne se résout jamais
+        // Cyrillic "е"; ".invalid" never resolves
         DomainPageDTO result = analyzer.analyzePage("\u0435xample.invalid");
 
         assertEquals(0, result.getHttpCode());

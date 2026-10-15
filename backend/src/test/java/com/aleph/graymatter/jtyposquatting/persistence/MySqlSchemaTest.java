@@ -17,10 +17,10 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Migrations Flyway et contraintes du schéma sur un vrai MySQL 8.4 (ignoré sans moteur de conteneurs).
+ * Flyway migrations and schema constraints on a real MySQL 8.4 (skipped without a container engine).
  * <p>
- * Avec Podman sans privilèges : DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock
- * et TESTCONTAINERS_RYUK_DISABLED=true.
+ * With rootless Podman: DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock
+ * and TESTCONTAINERS_RYUK_DISABLED=true.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest
@@ -41,7 +41,7 @@ class MySqlSchemaTest {
     }
 
     @Test
-    @DisplayName("Toutes les migrations sont appliquées sur MySQL")
+    @DisplayName("All migrations are applied on MySQL")
     void testMigrationsApplied() {
         Integer applied = jdbc.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE success = 1 AND version IS NOT NULL", Integer.class);
@@ -50,7 +50,7 @@ class MySqlSchemaTest {
     }
 
     @Test
-    @DisplayName("Des variantes homoglyphes ou de casse ne sont jamais confondues")
+    @DisplayName("Homoglyph or case variants are never confused")
     void testDomainCollation() {
         insertCheck("example.com");
         insertCheck("exämple.com");
@@ -58,14 +58,14 @@ class MySqlSchemaTest {
         assertEquals(3, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM domain_checks WHERE domain_unicode LIKE '%xample.com' OR domain_unicode LIKE '%xämple.com'",
                 Integer.class));
-        // Comparaison binaire : la clé ASCII d'un autre domaine ne correspond pas
+        // Binary comparison: the ASCII key of another domain does not match
         assertEquals(0, jdbc.queryForObject(
                 "SELECT COUNT(*) FROM domain_checks WHERE domain = 'EXAMPLE.COM'", Integer.class));
         assertThrows(DuplicateKeyException.class, () -> insertCheck("example.com"));
     }
 
     @Test
-    @DisplayName("Les sessions HTTP sont stockées dans MySQL (Spring Session)")
+    @DisplayName("HTTP sessions are stored in MySQL (Spring Session)")
     void testSessionTables() {
         assertNotNull(jdbc.queryForObject("SELECT COUNT(*) FROM SPRING_SESSION", Integer.class));
     }

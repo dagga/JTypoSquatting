@@ -24,8 +24,8 @@ import java.util.concurrent.Future;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Réclamation concurrente d'une analyse par plusieurs workers sur MySQL : un seul l'obtient.
- * Aucun worker de fond dans ce contexte, seuls les threads du test se disputent l'analyse.
+ * Concurrent claim of a scan by several workers on MySQL: only one gets it.
+ * No background worker in this context: only the test threads compete for the scan.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(properties = "jtypo.worker.enabled=false")
@@ -70,7 +70,7 @@ class ScanClaimMySqlTest {
     }
 
     @Test
-    @DisplayName("Une analyse en attente est obtenue par un seul des workers concurrents")
+    @DisplayName("A pending scan is obtained by only one of the competing workers")
     void testPendingClaimRace() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("race-user", "r", null), "race-test.com", false);
 
@@ -79,7 +79,7 @@ class ScanClaimMySqlTest {
     }
 
     @Test
-    @DisplayName("Une analyse abandonnée est reprise par un seul worker ; une analyse vivante ne l'est pas")
+    @DisplayName("An abandoned scan is taken over by one worker only; a live scan is not taken over")
     void testStaleClaimRace() throws Exception {
         Scan stale = scanService.createScan(new ScanUser("stale-user", "s", null), "stale-test.com", false);
         jdbc.update("UPDATE scans SET status = 'RUNNING', worker_id = 'dead', heartbeat_at = ? WHERE id = ?",

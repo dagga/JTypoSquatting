@@ -18,7 +18,7 @@ import java.net.URI;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Stockage S3 contre un serveur compatible S3 (S3Mock), ignoré sans moteur de conteneurs.
+ * S3 storage against an S3-compatible server (S3Mock), skipped without a container engine.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class S3ScreenshotStoreTest {
@@ -33,7 +33,7 @@ class S3ScreenshotStoreTest {
             .waitingFor(Wait.forHttp("/").forPort(9090));
 
     @Test
-    @DisplayName("Écriture, lecture et déduplication sur un stockage compatible S3")
+    @DisplayName("Write, read and deduplication on S3-compatible storage")
     void testPutGet() {
         try (S3Client s3 = S3Client.builder()
                 .endpointOverride(URI.create("http://" + S3.getHost() + ":" + S3.getMappedPort(9090)))
@@ -54,7 +54,7 @@ class S3ScreenshotStoreTest {
 
             store.delete(key);
             assertTrue(store.get(key).isEmpty());
-            store.delete(key); // sans effet si absente
+            store.delete(key); // no effect when missing
         }
     }
 }

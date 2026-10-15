@@ -14,7 +14,7 @@ class FileSystemScreenshotStoreTest {
     Path dir;
 
     @Test
-    @DisplayName("Stockage adressé par contenu : même contenu, même clé, stocké une fois")
+    @DisplayName("Content-addressed storage: same content, same key, stored once")
     void testPutGet() {
         FileSystemScreenshotStore store = new FileSystemScreenshotStore(dir);
         byte[] png = {(byte) 0x89, 'P', 'N', 'G', 1, 2, 3};
@@ -28,11 +28,11 @@ class FileSystemScreenshotStoreTest {
 
         store.delete(key);
         assertTrue(store.get(key).isEmpty());
-        store.delete(key); // sans effet si absente
+        store.delete(key); // no effect when missing
     }
 
     @Test
-    @DisplayName("Une clé ne peut pas sortir du répertoire de stockage")
+    @DisplayName("A key cannot escape the storage directory")
     void testPathTraversal() {
         FileSystemScreenshotStore store = new FileSystemScreenshotStore(dir);
         assertThrows(IllegalArgumentException.class, () -> store.get("../../etc/passwd"));

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { mockBackend } from "./mock-backend";
 
-test("l'utilisateur exporte ses données en JSON", async ({ page }) => {
+test("the user exports their data as JSON", async ({ page }) => {
   await mockBackend(page);
   await page.goto("/fr/app");
 
@@ -15,7 +15,7 @@ test("l'utilisateur exporte ses données en JSON", async ({ page }) => {
   expect(data.user.email).toBe("alice@example.com");
 });
 
-test("la suppression du compte demande confirmation, appelle DELETE /api/me puis déconnecte", async ({ page }) => {
+test("account deletion asks for confirmation, calls DELETE /api/me, then logs out", async ({ page }) => {
   const requests = await mockBackend(page);
   await page.goto("/fr/app");
 
@@ -30,6 +30,6 @@ test("la suppression du compte demande confirmation, appelle DELETE /api/me puis
   await expect(page).toHaveURL(/\/fr$/);
   const deletion = requests.findIndex((r) => r.method === "DELETE" && r.url === "/api/me");
   expect(requests[deletion].headers["x-xsrf-token"]).toBe("csrf-123");
-  // Puis déconnexion complète, pour fermer aussi la session du fournisseur d'identité
+  // Then a full logout, to end the identity provider session too
   expect(requests.findIndex((r) => r.method === "POST" && r.url === "/logout")).toBeGreaterThan(deletion);
 });

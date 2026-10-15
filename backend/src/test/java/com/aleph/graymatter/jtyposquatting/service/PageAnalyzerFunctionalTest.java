@@ -14,8 +14,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * Functional tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
  *
- * <p>Ces tests effectuent de vraies connexions réseau et/ou requièrent un display X11.
- * Ils sont marqués {@code @Tag("network")} et ne sont lancés que sur demande :
+ * <p>These tests open real network connections. They are tagged {@code @Tag("network")} and only
+ * run on demand:
  * {@code ./gradlew test -Dinclude.network=true}
  *
  * These tests verify:

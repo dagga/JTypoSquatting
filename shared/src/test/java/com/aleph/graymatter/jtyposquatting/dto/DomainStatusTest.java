@@ -6,12 +6,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour l'énumération DomainStatus.
+ * Unit tests of the DomainStatus enum.
  */
 class DomainStatusTest {
 
     @Test
-    @DisplayName("Chaque statut possède un label lisible")
+    @DisplayName("Each status has a readable label")
     void testLabels() {
         assertEquals("Active", DomainStatus.ACTIVE.getLabel());
         assertEquals("Dead", DomainStatus.DEAD.getLabel());
@@ -23,7 +23,7 @@ class DomainStatusTest {
     }
 
     @Test
-    @DisplayName("fromString() résout les labels connus (insensible à la casse)")
+    @DisplayName("fromString() resolves the known labels (case-insensitive)")
     void testFromStringKnown() {
         assertEquals(DomainStatus.ACTIVE, DomainStatus.fromString("Active"));
         assertEquals(DomainStatus.ACTIVE, DomainStatus.fromString("active"));
@@ -34,7 +34,7 @@ class DomainStatusTest {
     }
 
     @Test
-    @DisplayName("fromString() retourne UNKNOWN pour les valeurs inconnues")
+    @DisplayName("fromString() returns UNKNOWN for unknown values")
     void testFromStringUnknown() {
         assertEquals(DomainStatus.UNKNOWN, DomainStatus.fromString("invalid"));
         assertEquals(DomainStatus.UNKNOWN, DomainStatus.fromString(""));
@@ -42,7 +42,7 @@ class DomainStatusTest {
     }
 
     @Test
-    @DisplayName("Nombre correct de constantes d'énumération")
+    @DisplayName("Expected number of enum constants")
     void testEnumValues() {
         assertEquals(7, DomainStatus.values().length);
     }

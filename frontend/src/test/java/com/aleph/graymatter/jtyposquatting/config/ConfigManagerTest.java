@@ -8,7 +8,7 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour ConfigManager — i18n, rechargement de locale, clés absentes.
+ * Unit tests of ConfigManager: i18n, locale reloading, missing keys.
  */
 class ConfigManagerTest {
 
@@ -19,53 +19,53 @@ class ConfigManagerTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("getInstance() retourne toujours la même instance")
+    @DisplayName("getInstance() always returns the same instance")
     void testSingleton() {
         assertSame(config, ConfigManager.getInstance());
     }
 
     // ---------------------------------------------------------------
-    // getMessage — clés valides et invalides
+    // getMessage: valid and invalid keys
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("getMessage() retourne une valeur non-null pour une clé valide")
+    @DisplayName("getMessage() returns a non-null value for a valid key")
     void testGetMessageValidKey() {
         String value = config.getMessage("button.generate");
         assertNotNull(value);
         assertFalse(value.isBlank());
-        assertFalse(value.startsWith("!"), "La clé 'button.generate' n'existe pas dans messages.properties");
+        assertFalse(value.startsWith("!"), "Key 'button.generate' is missing from messages.properties");
     }
 
     @Test
-    @DisplayName("getMessage() retourne '!key!' pour une clé inexistante")
+    @DisplayName("getMessage() returns '!key!' for an unknown key")
     void testGetMessageMissingKey() {
         String value = config.getMessage("this.key.does.not.exist.at.all");
         assertEquals("!this.key.does.not.exist.at.all!", value);
     }
 
     @Test
-    @DisplayName("getMessage() avec args formate correctement la chaîne")
+    @DisplayName("getMessage() with arguments formats the string")
     void testGetMessageWithArgs() {
-        // Cette clé doit exister dans messages.properties avec un '%s'
-        // Si elle n'existe pas, le test retourne la sentinel et ne plante pas
+        // This key must exist in messages.properties with a '%s'
+        // If it does not, the sentinel value is returned and the test does not fail
         String value = config.getMessage("button.generate");
         assertNotNull(value);
     }
 
     // ---------------------------------------------------------------
-    // setLocale — rechargement dynamique du bundle
+    // setLocale: dynamic reloading of the bundle
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("setLocale(FR) charge les messages français")
+    @DisplayName("setLocale(FR) loads the French messages")
     void testSetLocaleFR() {
         Locale original = config.getLocale();
         try {
             config.setLocale(Locale.FRENCH);
             assertEquals(Locale.FRENCH, config.getLocale());
 
-            // Vérifie qu'on obtient un message non-nul après le rechargement
+            // A non-null message is returned after the reload
             String value = config.getMessage("button.generate");
             assertNotNull(value);
         } finally {
@@ -74,7 +74,7 @@ class ConfigManagerTest {
     }
 
     @Test
-    @DisplayName("setLocale(EN) charge les messages anglais")
+    @DisplayName("setLocale(EN) loads the English messages")
     void testSetLocaleEN() {
         Locale original = config.getLocale();
         try {
@@ -83,14 +83,14 @@ class ConfigManagerTest {
 
             String value = config.getMessage("button.generate");
             assertNotNull(value);
-            assertFalse(value.startsWith("!"), "Clé manquante après changement vers EN");
+            assertFalse(value.startsWith("!"), "Missing key after switching to EN");
         } finally {
             config.setLocale(original);
         }
     }
 
     @Test
-    @DisplayName("Après setLocale(), getMessage() retourne les nouvelles valeurs")
+    @DisplayName("After setLocale(), getMessage() returns the new values")
     void testLocaleChangeReloadsBundle() {
         Locale original = config.getLocale();
         try {
@@ -100,7 +100,7 @@ class ConfigManagerTest {
             config.setLocale(Locale.FRENCH);
             String frValue = config.getMessage("button.generate");
 
-            // EN et FR peuvent différer ou non, mais aucun ne doit être null
+            // EN and FR may or may not differ, but neither may be null
             assertNotNull(enValue);
             assertNotNull(frValue);
         } finally {
@@ -113,7 +113,7 @@ class ConfigManagerTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("getLocale() ne retourne jamais null")
+    @DisplayName("getLocale() never returns null")
     void testGetLocaleNotNull() {
         assertNotNull(config.getLocale());
     }
@@ -123,19 +123,19 @@ class ConfigManagerTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("getConfig() retourne null pour une clé absente (pas d'exception)")
+    @DisplayName("getConfig() returns null for a missing key (no exception)")
     void testGetConfigMissingKey() {
         assertNull(config.getConfig("non.existent.key.xyz"));
     }
 
     @Test
-    @DisplayName("getIntConfig() retourne la valeur par défaut si la clé est absente")
+    @DisplayName("getIntConfig() returns the default value when the key is missing")
     void testGetIntConfigDefault() {
         assertEquals(42, config.getIntConfig("non.existent.int.key", 42));
     }
 
     @Test
-    @DisplayName("getBooleanConfig() retourne false par défaut si la clé est absente")
+    @DisplayName("getBooleanConfig() returns false by default when the key is missing")
     void testGetBooleanConfigDefault() {
         assertFalse(config.getBooleanConfig("non.existent.bool.key", false));
     }
