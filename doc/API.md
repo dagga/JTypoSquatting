@@ -1,133 +1,187 @@
-# JTypoSquatting - API Documentation
+# JTypoSquatting — API Documentation
 
-**Version:** 2.0-alpha1  
-**Last Updated:** March 2025  
-**Base URL:** `http://localhost:8080/api`
+**Version:** 2.0-alpha1
+**Last updated:** October 2026
+**Base URL:** `http://localhost:8081/api` (development and desktop). In production, the reverse proxy serves
+the API on the same origin as the frontend: `https://<site>/api`.
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Authentication](#2-authentication)
+2. [Authentication and security](#2-authentication-and-security)
 3. [Scans (web service)](#3-scans-web-service)
-   - [Domain Generation & Checking Endpoints (desktop only)](#3bis-domain-generation--checking-endpoints-desktop-application-only)
-4. [Data Management Endpoints (desktop only)](#4-data-management-endpoints-desktop-application-only)
-5. [Data Transfer Objects](#5-data-transfer-objects)
-6. [Error Handling](#6-error-handling)
+4. [Desktop application endpoints (local mode only)](#4-desktop-application-endpoints-local-mode-only)
+5. [Data formats](#5-data-formats)
+6. [Errors, rate limiting and quotas](#6-errors-rate-limiting-and-quotas)
 7. [Server-Sent Events](#7-server-sent-events)
 8. [Examples](#8-examples)
+- [Appendix A: Status values](#appendix-a-status-values)
+- [Appendix B: Monitoring endpoints](#appendix-b-monitoring-endpoints)
+- [Appendix C: Changelog](#appendix-c-changelog)
 
 ---
 
 ## 1. Overview
 
-### 1.1 API Style
+- REST over HTTP, JSON bodies (`application/json`), live results as Server-Sent Events
+  (`text/event-stream`).
+- Dates are ISO-8601 instants in UTC (`2026-10-14T17:02:11.123Z`).
+- Domains are accepted in Unicode (`éxample.com`). They are stored in ASCII/punycode
+  (`xn--xample-9ua.com`) and returned in both forms.
 
-- **Protocol:** HTTP/1.1
-- **Format:** JSON
-- **Communication:** REST + Server-Sent Events (SSE)
-- **Content Type:** `application/json`
+### 1.1 Endpoints summary
 
-### 1.2 Endpoints Summary
-
-**Web service** (all modes; login required in web mode, see [Authentication](#2-authentication)):
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/me` | Current user |
-| POST | `/scans` | Queue a scan (202) |
-| GET | `/scans` | Last 50 scans of the user |
-| GET | `/scans/{id}` | Scan status and counters |
-| GET | `/scans/{id}/results?after=&limit=` | Results, page by page |
-| GET | `/scans/{id}/events` | Live results (SSE, resumable with `Last-Event-ID`) |
-| DELETE | `/scans/{id}` | Cancel a scan |
-
-**Desktop application only** (`jtypo.security.mode=local`; these endpoints do not exist in web mode
-because they act on the data and analyses of every user):
+**Web service.** These endpoints exist in every mode. In web mode they require a login, see
+[§ 2](#2-authentication-and-security).
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/generate-and-check` | Generate and check domains (SSE) |
-| GET | `/cancel` | Cancel every active analysis |
-| DELETE | `/cancel-and-clear` | Cancel every analysis and clear the cache |
-| GET | `/data/analyze-and-save` | Analyze domain and save (SSE) |
-| GET | `/data/analyze` | Analyze single domain |
-| GET | `/data/cached/{domain}` | Get cached domain data |
-| GET | `/data/all` | Get all cached domains |
-| DELETE | `/data/all` | Clear all cached data |
-| GET | `/data/stats` | Get statistics |
+| GET | `/api/me` | Current user |
+| GET | `/api/me/export` | All data of the user (GDPR access and portability) |
+| DELETE | `/api/me` | Delete the account and its data |
+| POST | `/api/scans` | Queue a scan (202) |
+| GET | `/api/scans` | Last 50 scans of the user |
+| GET | `/api/scans/{id}` | Scan status and counters |
+| GET | `/api/scans/{id}/results?after=&limit=` | Results, page by page |
+| GET | `/api/scans/{id}/events` | Live results (SSE, resumable with `Last-Event-ID`) |
+| DELETE | `/api/scans/{id}` | Cancel a scan |
+| GET | `/api/screenshots/{sha256}` | Screenshot (PNG) |
+| GET | `/oauth2/authorization/oidc` | Start the OpenID Connect login (browser navigation) |
+| POST | `/logout` | End the session; returns the identity provider logout URL |
 
---------|----------|-------------|------|
-| GET | `/generate-and-check` | Generate and check domains (SSE) | No |
-| GET | `/cancel` | Cancel active analysis | No |
-| GET | `/data/analyze-and-save` | Analyze domain and save (SSE) | No |
-| GET | `/data/analyze` | Analyze single domain | No |
-| GET | `/data/cached/{domain}` | Get cached domain data | No |
-| GET | `/data/all` | Get all cached domains | No |
-| DELETE | `/data/all` | Clear all cached data | No |
-| GET | `/data/stats` | Get statistics | No |
+**Desktop application only.** These endpoints exist in local mode only (`jtypo.security.mode=local`). They
+act on the data and analyses of every user, so they are not loaded in web mode, where they return **404**.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/generate-and-check?domain=` | Generate and check the variants of a domain (SSE) |
+| GET | `/api/cancel` | Cancel every running analysis |
+| DELETE | `/api/cancel-and-clear` | Cancel every analysis and clear the stored pages |
+| GET | `/api/data/analyze?domain=` | Analyse one domain |
+| GET | `/api/data/analyze-and-save?domain=` | Analyse one domain and store the page (SSE) |
+| GET | `/api/data/cached/{domain}` | Stored page of a domain |
+| GET | `/api/data/all` | All stored pages |
+| DELETE | `/api/data/all` | Delete all stored pages |
+| GET | `/api/data/stats` | Number of stored pages |
 
 ---
 
-## 2. Authentication
+## 2. Authentication and security
 
 The security mode is selected with `jtypo.security.mode`.
 
 ### 2.1 Web mode (`oidc`, default)
 
+**Login.**
+
 - Users log in through an OpenID Connect provider (Keycloak in development, see `docker-compose.yml`).
-  Browsers are redirected to `/oauth2/authorization/oidc`; after login the backend keeps the session
-  in an httpOnly cookie (`JSESSIONID`). The same cookie authenticates SSE streams.
-- Every `/api/**` call without a valid session returns **401 Unauthorized** (no redirect).
-- Requests that modify data (`POST`, `PUT`, `DELETE`) require the CSRF token: read the `XSRF-TOKEN`
-  cookie and send it back in the `X-XSRF-TOKEN` header. Otherwise the response is **403 Forbidden**.
-- `POST /logout` (with the CSRF header) ends the session and returns `{"logoutUrl": "..."}`, the identity
-  provider end-session URL: a `fetch()` cannot follow a cross-origin redirect, so the frontend navigates to it.
-- After login, the browser is sent to `jtypo.security.post-login-url` (default `/app`).
+- Browsers start at `/oauth2/authorization/oidc`. The backend redirects to the provider with PKCE
+  (`code_challenge_method=S256`) and receives the code on `/login/oauth2/code/oidc`.
+- After a successful login, the browser goes to `jtypo.security.post-login-url` (`/app`). After a failed
+  login, it goes to `/app?loginError=1`.
+- The provider configuration is discovered at the first login, so the API starts even when the provider
+  is down.
+
+**Session.**
+
+- The session is kept in an httpOnly cookie named `SESSION` (Spring Session, stored in the database and
+  shared by the API instances).
+- The same cookie authenticates the SSE streams: `EventSource` cannot send an `Authorization` header.
+
+**Unauthenticated calls.** Every `/api/**` call without a valid session returns **401 Unauthorized**. The
+API never redirects to the login page.
+
+**CSRF.**
+
+- Requests that modify data (`POST`, `PUT`, `DELETE`, including `POST /logout`) require the CSRF token.
+- Read the `XSRF-TOKEN` cookie, which any API response sets, and send its value back in the
+  `X-XSRF-TOKEN` header. Otherwise the response is **403 Forbidden**.
+
+**Logout.** `POST /logout` ends the session and returns **200** with
+`{"logoutUrl": "<identity provider end-session URL>"}`. The frontend then navigates to that URL itself,
+because a `fetch()` cannot follow a redirect to another origin.
 
 | Property | Environment variable | Description |
 |----------|---------------------|-------------|
-| `jtypo.oidc.issuer-uri` | `OIDC_ISSUER_URI` | Issuer URL, discovered on first login |
+| `jtypo.oidc.issuer-uri` | `OIDC_ISSUER_URI` | Issuer URL, discovered at the first login |
 | `jtypo.oidc.client-id` | `OIDC_CLIENT_ID` | Confidential client id |
 | `jtypo.oidc.client-secret` | `OIDC_CLIENT_SECRET` | Client secret |
+| `jtypo.security.post-login-url` | — | Page after login (default `/app`) |
+| `jtypo.security.login-failure-url` | — | Page after a failed login (default `/app?loginError=1`) |
 | `server.servlet.session.cookie.secure` | `SESSION_COOKIE_SECURE` | Must be `true` behind HTTPS |
+| `server.forward-headers-strategy` | `FORWARD_HEADERS_STRATEGY` | `framework` behind the reverse proxy (HTTPS and public host detection) |
+
+### 2.2 Security headers
+
+Every response carries:
+
+- `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`;
+- `Referrer-Policy: strict-origin-when-cross-origin`;
+- `Permissions-Policy`;
+- `X-Content-Type-Options: nosniff`;
+- `X-Frame-Options: DENY`;
+- over HTTPS, `Strict-Transport-Security`.
+
+CORS is disabled: the frontend and the API are served from the same origin by the reverse proxy (by the
+Next.js rewrites in development).
+
+### 2.3 Desktop mode (`local`)
+
+The all-in-one JAR (`CombinedLauncher`) sets this mode.
+
+- The API listens on `127.0.0.1` only and requires no login, no CSRF token and no rate limit.
+- `GET /api/me` returns **204 No Content**.
+- The web-service endpoints are available too, with a single implicit user, `local`.
+
+Never use this mode on a server.
+
+### 2.4 Current user and account
 
 #### GET /api/me
 
-Returns the logged-in user.
+**200**:
 
 ```json
-{ "id": "f3c1...", "username": "alice", "name": "Alice Dev", "email": "alice@example.com" }
+{ "id": "f3c1…", "username": "alice", "name": "Alice Dev", "email": "alice@example.com" }
 ```
 
-#### GET /api/me/export — DELETE /api/me
+#### GET /api/me/export
 
-- `GET /api/me/export`: everything stored about the user (profile, scans, results), as a JSON attachment
-  (GDPR access and portability).
-- `DELETE /api/me` (CSRF header required): deletes the profile, scans, results and the screenshots no
-  other user needs, and ends the other sessions of the user; **204**. The frontend then calls
-  `POST /logout` to end the current session and the identity provider session.
+Returns **200** with `Content-Disposition: attachment; filename="jtyposquatting-data.json"`. The body holds
+everything stored about the user:
 
-Security headers on every response: `Content-Security-Policy` (`default-src 'none'`), `Referrer-Policy`,
-`Permissions-Policy`, `X-Content-Type-Options`, `X-Frame-Options` and, over HTTPS, `Strict-Transport-Security`.
-CORS is disabled: the frontend and the API are served from the same origin by the reverse proxy.
-Behind the proxy, set `FORWARD_HEADERS_STRATEGY=framework` so that HTTPS and the public host are detected.
+```json
+{
+  "exportedAt": "2026-10-14T17:10:00Z",
+  "user": { "id": "f3c1…", "username": "alice", "email": "alice@example.com",
+            "createdAt": "…", "lastSeenAt": "…" },
+  "scans": [ { "scan": { "id": "3f0c…", "baseDomain": "example.com", "status": "COMPLETED", "…": "…" },
+               "results": [ { "id": 1234, "domain": "exmple.com", "…": "…" } ] } ]
+}
+```
 
-### 2.2 Desktop mode (`local`)
+#### DELETE /api/me
 
-Set by the all-in-one JAR (`CombinedLauncher`): the API listens on `127.0.0.1` only and requires no
-authentication. `GET /api/me` returns **204 No Content**. Never use this mode on a server.
+Requires the CSRF header. Returns **204**. The call deletes:
+
+- the profile, the scans and the results;
+- the screenshots that no other user needs;
+- the other sessions of the user.
+
+The current session is kept, so that the frontend can then call `POST /logout`, which also ends the
+identity provider session. Otherwise the next login would be silent and recreate the account.
 
 ---
 
 ## 3. Scans (web service)
 
-A scan generates the typo variants of a domain and checks them. It is queued, processed by a worker
-(possibly on another instance), and its results are stored, so the browser can be closed and the scan
-followed again later.
+A scan generates the typo variants of a domain and checks them. It is queued and processed by a worker,
+possibly on another instance. Its results are stored, so the browser can be closed and the scan followed
+again later.
 
-### 3.0.1 Queue a scan
+### 3.1 Queue a scan
 
 ```http
 POST /api/scans
@@ -137,24 +191,32 @@ X-XSRF-TOKEN: <XSRF-TOKEN cookie value>
 { "baseDomain": "example.com", "forceRefresh": false }
 ```
 
-**202 Accepted**, `Location: /api/scans/{id}`:
+**202 Accepted**, `Location: /api/scans/{id}`, body: the scan ([§ 5.1](#51-scan)) with status `PENDING`.
 
-```json
-{
-  "id": "3f0c9a2e-...", "baseDomain": "example.com", "status": "PENDING",
-  "totalDomains": 0, "checkedDomains": 0,
-  "createdAt": "2026-10-14T17:02:11.123Z", "startedAt": null, "finishedAt": null, "error": null
-}
+- `forceRefresh`: by default, a domain checked less than `jtypo.cache.ttl-hours` (24) ago, by any user,
+  is taken from the shared cache. Set it to `true` to check every domain again.
+- **400** `{"error": "…"}`: missing or invalid domain.
+- **429** `{"error": "…"}` with `Retry-After`: too many simultaneous scans, or the daily quota is reached.
+  Quotas are computed from the database, so they hold across instances and restarts.
+
+### 3.2 List and read scans
+
+- `GET /api/scans`: the 50 most recent scans of the user, newest first.
+- `GET /api/scans/{id}`: one scan.
+
+A scan of another user returns **403**, an unknown scan **404**.
+
+### 3.3 Results, page by page
+
+```http
+GET /api/scans/{id}/results?after=0&limit=100
 ```
 
-`forceRefresh`: by default, a domain checked less than `jtypo.cache.ttl-hours` (24) ago, by any user,
-is taken from the shared cache instead of being checked again; `true` checks every domain again.
+Returns the results ([§ 5.2](#52-scan-result)) whose `id` is greater than `after`, in increasing `id`
+order. `limit` goes from 1 to 500 (default 100). To read everything, call again with `after` set to the
+last `id` received.
 
-`status`: `PENDING`, `RUNNING`, `COMPLETED`, `CANCELLED`, `FAILED`. Errors: 400 (invalid domain),
-429 (quota: simultaneous scans or scans per 24 hours, computed from the database).
-Internationalised domains are accepted (`exämple.com`) and stored in punycode.
-
-### 3.0.2 Follow a scan (SSE)
+### 3.4 Follow a scan live (SSE)
 
 ```http
 GET /api/scans/{id}/events
@@ -162,618 +224,329 @@ Accept: text/event-stream
 Last-Event-ID: 1234        (optional, sent automatically by browsers when they reconnect)
 ```
 
-| Event | Data | Notes |
-|-------|------|-------|
-| `result` | one checked domain (see below) | `id:` = result id, used by `Last-Event-ID` |
-| `progress` | the scan (same format as above) | sent when status or counters change |
-| `end` | the final scan | the stream is then closed |
+| Event | `id:` | Data | When |
+|-------|-------|------|------|
+| `result` | result id | one checked domain ([§ 5.2](#52-scan-result)) | for each result after `Last-Event-ID` |
+| `progress` | — | the scan ([§ 5.1](#51-scan)) | at the start, then when the status or the counters change |
+| `end` | — | the final scan | when the scan is finished; the stream is then closed |
 
-A comment line (`: keep-alive`) is sent every 15 s without activity. Streams last at most 30 minutes;
-the browser reconnects by itself and only receives the results it missed.
+- **Keep-alive**: a comment line (`: keep-alive`) is sent after 15 s without events.
+- **Duration**: a stream lasts at most 30 minutes (`jtypo.sse.max-duration-ms`). The browser reconnects
+  by itself and only receives the results it missed.
+- **Proxies**: the response carries `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`,
+  so that proxies neither compress nor buffer the stream.
 
-```json
-{
-  "id": 1234, "domain": "ехаmple.com", "domainAscii": "xn--mple-43d4a.com",
-  "status": "Suspicious", "httpCode": 200, "tlsStatus": "UNTRUSTED",
-  "title": "Example", "language": "ENGLISH", "description": "...", "homepageText": "...",
-  "httpHeaders": { "Server": "nginx" }, "screenshotUrl": "/api/screenshots/9f86d0…", "checkedAt": "2026-10-14T17:02:15.456Z"
-}
-```
+### 3.5 Cancel a scan
 
-### 3.0.3 Other operations
+`DELETE /api/scans/{id}` requires the CSRF header.
 
-- `GET /api/scans/{id}/results?after=0&limit=100`: results with an id greater than `after` (max 500 per page).
-- `DELETE /api/scans/{id}`: **204** if the scan was active and is cancelled, **409** if it was already finished.
-- A scan of another user returns **403**, an unknown scan **404**.
+- **204**: the scan was active and is now cancelled. The worker stops at its next heartbeat (5 s).
+- **409**: the scan was already finished.
+- **403** / **404**: as above.
 
-### 3.0.4 Screenshots
+### 3.6 Screenshots
 
-`GET /api/screenshots/{sha256}` returns the PNG (`Cache-Control: private, immutable`). Screenshots are
-stored outside the database, addressed by the SHA-256 of their content (a parking page shared by many
-domains is stored once). A screenshot is served only to a user who owns a scan containing it; otherwise
-**404**. Events carry the URL (`screenshotUrl`), never the image itself.
+`GET /api/screenshots/{sha256}` returns the PNG with `Cache-Control: max-age=2592000, private, immutable`.
+Results carry this URL in `screenshotUrl`; the image itself never travels in the events.
+
+- **Storage**: screenshots are stored outside the database and addressed by the SHA-256 of their content,
+  so a parking page shared by many domains is stored once.
+- **Access**: a screenshot is served only to a user who owns a scan containing it. Otherwise the response
+  is **404**, including for a malformed hash.
 
 | Property | Environment variable | Description |
 |----------|---------------------|-------------|
 | `jtypo.storage.type` | `STORAGE_TYPE` | `filesystem` (default: desktop, development) or `s3` (web service) |
-| `jtypo.storage.directory` | `STORAGE_DIRECTORY` | Directory of the `filesystem` store |
+| `jtypo.storage.directory` | `STORAGE_DIRECTORY` | Directory of the `filesystem` storage |
 | `jtypo.storage.s3.endpoint` | `S3_ENDPOINT` | Endpoint of an S3-compatible service (empty for AWS) |
 | `jtypo.storage.s3.region` | `S3_REGION` | Region |
 | `jtypo.storage.s3.bucket` | `S3_BUCKET` | Bucket (must exist) |
 | `jtypo.storage.s3.access-key` / `secret-key` | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | Credentials |
 | `jtypo.storage.s3.path-style` | `S3_PATH_STYLE` | Path-style URLs (most self-hosted services) |
 
-Any S3-compatible service works (AWS S3, Scaleway, OVHcloud, Garage, SeaweedFS…). The community MinIO
-images are no longer published on Docker Hub; the tests use S3Mock.
+---
+
+## 4. Desktop application endpoints (local mode only)
+
+These endpoints serve the Swing client. They are loaded only when `jtypo.security.mode=local`. Responses
+use the formats of [§ 5.3](#53-legacy-formats).
+
+### 4.1 Generate and check
+
+```http
+GET /api/generate-and-check?domain=example.com
+```
+
+The response is an SSE stream of `domainUpdate` events, each with a `DomainResultDTO` and an `id:` set to
+a timestamp in milliseconds.
+
+1. One event per generated domain, with status `Testing...` and `httpCode` -1.
+2. One event per checked domain, with its final status.
+3. The stream is then closed.
+
+An invalid domain gives `event: error` with `{"error": "Invalid domain name provided."}`.
+
+### 4.2 Cancel
+
+- `GET /api/cancel`: stops every running analysis; **200**.
+- `DELETE /api/cancel-and-clear`: stops every analysis, then deletes all stored pages; **200**.
+
+### 4.3 Stored pages
+
+| Endpoint | Response |
+|----------|----------|
+| `GET /api/data/analyze?domain=` | **200** `DomainPageDTO`, or **500** with a text message |
+| `GET /api/data/analyze-and-save?domain=` | SSE: one `domainUpdate` event (`DomainPageDTO`), or an `error` event |
+| `GET /api/data/cached/{domain}` | **200** `DomainPageDTO`, or **404** with an empty body |
+| `GET /api/data/all` | **200** array of `DomainPageDTO` |
+| `DELETE /api/data/all` | **200** with the text `All cached data cleared` |
+| `GET /api/data/stats` | **200** `{"totalDomains": 150}` |
+
+Stored pages are emptied at each start of the application.
 
 ---
 
-## 3bis. Domain Generation & Checking Endpoints (desktop application only)
+## 5. Data formats
 
-These endpoints exist only in local mode (`jtypo.security.mode=local`). The web service uses [Scans](#3-scans-web-service).
-
-### 3.1 Generate and Check Domains
-
-Generates typo squatted domains and checks their status in real-time using Server-Sent Events.
-
-```http
-GET /api/generate-and-check?domain={domain}
-```
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | String | Yes | Target domain (e.g., `www.example.com`) |
-
-**Response:**
-
-- **Content-Type:** `text/event-stream`
-- **Format:** Server-Sent Events stream
-
-**SSE Event Format:**
-
-```
-event: domainUpdate
-id: 1234567890
-data: {"domain":"www.examp1e.com","status":"Testing...","httpCode":-1,...}
-
-event: domainUpdate
-id: 1234567891
-data: {"domain":"www.examp1e.com","status":"Suspicious","httpCode":200,...}
-```
-
-**DomainResultDTO Fields:**
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `domain` | String | Full domain URL |
-| `status` | String | `Testing...`, `Suspicious`, `Safe`, `Dead`, `Timeout`, `Unreachable` |
-| `title` | String | Page title |
-| `language` | String | Detected language code |
-| `description` | String | Page description |
-| `httpCode` | Integer | HTTP response code (-1 = testing, 0 = dead) |
-| `screenshot` | String (Base64) | Screenshot as Base64-encoded PNG |
-| `httpHeaders` | Object | HTTP response headers |
-
-**Example Stream:**
-
-```javascript
-// Event 1: Domain generated (testing)
-event: domainUpdate
-id: 1709567890123
-data: {"domain":"www.examp1e.com","status":"Testing...","title":"","language":"","description":"","httpCode":-1,"screenshot":null,"httpHeaders":{}}
-
-// Event 2: Check complete (suspicious)
-event: domainUpdate
-id: 1709567890456
-data: {"domain":"www.examp1e.com","status":"Suspicious","title":"Example Domain","language":"EN","description":"Example website","httpCode":200,"screenshot":"iVBORw0KGgoAAAANSUhEUgAA...","httpHeaders":{"content-type":"text/html"}}
-```
-
-**Error Events:**
-
-```
-event: error
-data: {"error":"Invalid domain name provided."}
-```
-
----
-
-### 3.2 Cancel Active Analysis
-
-Cancels all ongoing domain analysis operations.
-
-```http
-GET /api/cancel
-```
-
-**Response:**
-
-- **Status:** `200 OK`
-- **Body:** Empty
-
-**Use Case:** Stop domain generation when user clicks "Clear" or closes the application.
-
----
-
-## 4. Data Management Endpoints (desktop application only)
-
-These endpoints exist only in local mode: the cached data is shared by everyone.
-
-### 4.1 Analyze and Save (SSE)
-
-Analyzes a single domain and saves the result to the database with streaming updates.
-
-```http
-GET /api/data/analyze-and-save?domain={domain}
-```
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | String | Yes | Domain to analyze |
-
-**Response:**
-
-- **Content-Type:** `text/event-stream`
-- **Format:** Server-Sent Events
-
-**SSE Event:**
-
-```
-event: domainUpdate
-data: {"domain":"www.example.com","status":"Safe","httpCode":200,...}
-```
-
----
-
-### 4.2 Analyze Single Domain
-
-Analyzes a domain and returns the result immediately (no streaming).
-
-```http
-GET /api/data/analyze?domain={domain}
-```
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | String | Yes | Domain to analyze |
-
-**Response:**
-
-- **Status:** `200 OK` or `500 Internal Server Error`
-- **Content-Type:** `application/json`
-
-**Success Response:**
+### 5.1 Scan
 
 ```json
 {
-  "domain": "www.example.com",
-  "status": "Safe",
-  "title": "Example Domain",
-  "language": "EN",
-  "description": "Example website description",
-  "httpCode": 200,
-  "screenshot": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "httpHeaders": {
-    "content-type": "text/html; charset=utf-8",
-    "server": "nginx"
-  },
-  "homepageText": "Example Domain. This domain is for use in...",
-  "metaDescription": "Example website description",
-  "metaKeywords": "example, test, domain",
-  "metaAuthor": "Example Inc."
+  "id": "3f0c9a2e-…",
+  "baseDomain": "example.com",
+  "status": "RUNNING",
+  "totalDomains": 1780,
+  "checkedDomains": 412,
+  "createdAt": "2026-10-14T17:02:11.123Z",
+  "startedAt": "2026-10-14T17:02:12.004Z",
+  "finishedAt": null,
+  "error": null
 }
 ```
 
-**Error Response:**
+| Field | Description |
+|-------|-------------|
+| `baseDomain` | Scanned domain, Unicode form |
+| `status` | `PENDING`, `RUNNING`, `COMPLETED`, `CANCELLED` or `FAILED` |
+| `totalDomains` | Generated domains to check, at most `jtypo.quota.max-domains-per-scan` (50 000); 0 until the worker has generated them |
+| `checkedDomains` | Domains checked so far |
+| `error` | Reason of a `FAILED` scan |
+
+### 5.2 Scan result
 
 ```json
 {
-  "error": "Error analyzing domain: Connection timeout"
-}
-```
-
----
-
-### 4.3 Get Cached Domain
-
-Retrieves cached analysis data for a specific domain.
-
-```http
-GET /api/data/cached/{domain}
-```
-
-**Parameters:**
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `domain` | String (path) | Yes | Domain to retrieve (URL-encoded) |
-
-**Response:**
-
-- **Status:** `200 OK`, `404 Not Found`, or `500 Internal Server Error`
-
-**Success (200 OK):**
-
-```json
-{
-  "id": 1,
-  "domain": "www.example.com",
-  "status": "Safe",
-  "title": "Example Domain",
-  "language": "EN",
-  "httpCode": 200,
-  "timestamp": "2025-03-05T10:30:00Z"
-}
-```
-
-**Not Found (404):**
-
-```json
-{
-  "error": "Domain not found in cache"
-}
-```
-
----
-
-### 4.4 Get All Cached Domains
-
-Retrieves all cached domain analysis results.
-
-```http
-GET /api/data/all
-```
-
-**Response:**
-
-- **Status:** `200 OK`
-- **Content-Type:** `application/json`
-
-```json
-[
-  {
-    "id": 1,
-    "domain": "www.example.com",
-    "status": "Safe",
-    "httpCode": 200
-  },
-  {
-    "id": 2,
-    "domain": "www.examp1e.com",
-    "status": "Suspicious",
-    "httpCode": 200
-  }
-]
-```
-
----
-
-### 4.5 Clear All Cached Data
-
-Deletes all cached domain data from the database.
-
-```http
-DELETE /api/data/all
-```
-
-**Response:**
-
-- **Status:** `200 OK`
-
-```json
-{
-  "message": "All cached data cleared"
-}
-```
-
----
-
-### 4.6 Get Statistics
-
-Retrieves statistics about cached domains.
-
-```http
-GET /api/data/stats
-```
-
-**Response:**
-
-- **Status:** `200 OK`
-
-```json
-{
-  "totalDomains": 150
-}
-```
-
----
-
-## 5. Data Transfer Objects
-
-### 5.1 DomainResultDTO
-
-Used for streaming domain check results.
-
-```json
-{
-  "domain": "www.examp1e.com",
+  "id": 1234,
+  "domain": "éxample.com",
+  "domainAscii": "xn--xample-9ua.com",
   "status": "Suspicious",
-  "title": "Example Domain",
-  "language": "EN",
-  "description": "Example website for illustrative purposes",
   "httpCode": 200,
-  "screenshotBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "homepageText": "Example Domain. This domain is for use in...",
-  "httpHeaders": {
-    "content-type": "text/html; charset=utf-8",
-    "content-length": "1234",
-    "server": "nginx/1.18.0"
-  }
+  "tlsStatus": "UNTRUSTED",
+  "title": "Example",
+  "language": "ENGLISH",
+  "description": "…",
+  "homepageText": "…",
+  "httpHeaders": { "Server": "nginx" },
+  "screenshotUrl": "/api/screenshots/9f86d081…",
+  "checkedAt": "2026-10-14T17:02:15.456Z"
 }
 ```
 
-**Field Details:**
+| Field | Description |
+|-------|-------------|
+| `id` | Order of the result in the scan; SSE event id |
+| `domain` / `domainAscii` | Unicode form (display) / ASCII form (actual DNS name) |
+| `status` | `Suspicious` (HTTP 200), `Safe` (other HTTP response), `Unreachable` (no response); see [Appendix A](#appendix-a-status-values) |
+| `httpCode` | HTTP status after redirects; 0 if unreachable |
+| `tlsStatus` | `VALID`, `EXPIRED`, `HOSTNAME_MISMATCH`, `UNTRUSTED`, `HANDSHAKE_FAILED` or `NONE` (no HTTPS response) |
+| `title`, `description`, `homepageText` | From the page: title (up to 100 characters), meta description (up to 300), start of the text (about 200) |
+| `language` | Detected language (12 languages), e.g. `ENGLISH`, or null |
+| `screenshotUrl` | URL of the screenshot, or null |
+| `checkedAt` | Date of the check (it may come from the shared cache) |
 
-| Field | Type | Nullable | Description |
-|-------|------|----------|-------------|
-| `domain` | String | No | Full domain URL |
-| `status` | String | No | Current status |
-| `title` | String | Yes | HTML page title |
-| `language` | String | Yes | ISO language code |
-| `description` | String | Yes | Page description/meta |
-| `httpCode` | Integer | No | HTTP response code |
-| `screenshotBase64` | String | Yes | Base64-encoded PNG |
-| `homepageText` | String | Yes | First 200 chars of text |
-| `httpHeaders` | Object | Yes | Response headers map |
-| `tlsStatus` | String | No | Certificate check: `VALID`, `EXPIRED`, `HOSTNAME_MISMATCH`, `UNTRUSTED`, `HANDSHAKE_FAILED` or `NONE` (no HTTPS response) |
+### 5.3 Legacy formats
 
-### 5.2 DomainPageDTO
+The desktop endpoints use these formats.
 
-Extended DTO for detailed domain analysis.
+**`DomainResultDTO`:**
 
-```json
-{
-  "domain": "www.example.com",
-  "status": "Safe",
-  "title": "Example Domain",
-  "language": "EN",
-  "description": "Example website",
-  "httpCode": 200,
-  "screenshotBase64": "iVBORw0KGgoAAAANSUhEUgAA...",
-  "homepageText": "Example Domain...",
-  "httpHeaders": {...},
-  "metaDescription": "Meta description content",
-  "metaKeywords": "keyword1, keyword2",
-  "metaAuthor": "Author name",
-  "metaOgTitle": "Open Graph title",
-  "metaOgDescription": "Open Graph description",
-  "detectedLanguage": "ENGLISH",
-  "timestamp": "2025-03-05T10:30:00Z"
-}
-```
+| Field | Description |
+|-------|-------------|
+| `domain` | Domain |
+| `status`, `title`, `language`, `description` | As in [§ 5.2](#52-scan-result); `status` is `Testing...` while a domain is checked |
+| `httpCode` | -1 while testing |
+| `tlsStatus` | As in [§ 5.2](#52-scan-result) |
+| `homepageText` | Start of the page text |
+| `httpHeaders` | Response headers |
+| `screenshot`, `screenshotBase64` | The PNG in Base64 |
+
+**`DomainPageDTO`:**
+
+| Field | Description |
+|-------|-------------|
+| `domain` | Domain |
+| `htmlContent`, `textContent` | Full HTML, up to 2 MB, and its text |
+| `homepageText`, `title` | Start of the page text, page title |
+| `metaDescription`, `metaKeywords`, `metaAuthor`, `metaOgTitle`, `metaOgDescription` | Page metadata |
+| `detectedLanguage` | Detected language |
+| `timestamp` | Epoch milliseconds |
+| `httpCode`, `httpHeaders`, `tlsStatus` | Response |
+| `screenshot` | PNG in Base64 |
 
 ---
 
-## 6. Error Handling
+## 6. Errors, rate limiting and quotas
 
-### 6.1 HTTP Status Codes
+### 6.1 HTTP status codes
 
-| Code | Meaning | When Returned |
-|------|---------|---------------|
-| 200 | OK | Successful request |
-| 400 | Bad Request | Invalid parameters |
-| 401 | Unauthorized | No valid session (web mode) |
-| 403 | Forbidden | Missing CSRF token |
-| 404 | Not Found | Domain not in cache |
-| 429 | Too Many Requests | Rate limit or scan quota exceeded; see `Retry-After` |
-| 500 | Internal Server Error | Server error |
+| Code | When |
+|------|------|
+| 200 / 202 / 204 | Success (202: scan queued; 204: deletion or cancellation done) |
+| 400 | Invalid domain (`{"error": "…"}`) |
+| 401 | No valid session (web mode) |
+| 403 | Missing CSRF token, or the scan belongs to another user |
+| 404 | Unknown scan, screenshot not accessible, desktop endpoint in web mode |
+| 409 | Cancelling a scan that is already finished |
+| 429 | Rate limit or scan quota exceeded; see `Retry-After` |
+| 500 | Server error (also when the identity provider is unreachable at login) |
 
-#### Rate limiting and quotas
+Error bodies, when present, are JSON: `{"error": "message"}`. The legacy endpoints may return plain text
+instead.
 
-Limits apply per user (per client IP for anonymous calls). Counters are kept in memory, per instance.
-A 429 response carries a `Retry-After` header (seconds) and a JSON body `{"error": "..."}`, also on the SSE endpoint.
+### 6.2 Rate limiting and quotas
+
+Limits apply per user, or per client IP for anonymous calls. The rate limit is kept in memory, per API
+instance. The scan quotas are computed from the database. A 429 response carries a `Retry-After` header
+(seconds) and a JSON body `{"error": "..."}`. API responses carry `X-RateLimit-Remaining`.
 
 | Property | Default | Description |
 |----------|---------|-------------|
 | `jtypo.rate-limit.requests-per-minute` | 120 | API requests per minute |
-| `jtypo.quota.max-concurrent-scans` | 2 | Simultaneous scans per user |
+| `jtypo.quota.max-concurrent-scans` | 2 | Scans `PENDING` or `RUNNING` per user |
 | `jtypo.quota.scans-per-day` | 50 | Scans per user over a sliding 24-hour window |
-| `jtypo.quota.max-domains-per-scan` | 3000 | Generated domains checked per scan (extra ones are dropped) |
-| `jtypo.analysis.max-concurrent-checks` | 64 | Outbound checks running at the same time on the instance |
-| `jtypo.outbound.user-agent` | `Mozilla/5.0 (compatible; JTypoSquatting/2.0)` | User-Agent of the HTTP client and the browser |
+| `jtypo.quota.max-domains-per-scan` | 50 000 | Generated domains checked per scan (extra ones are dropped) |
+| `jtypo.analysis.max-concurrent-checks` | 64 | Outbound checks running at the same time on an instance |
+| `jtypo.outbound.user-agent` | `Mozilla/5.0 (compatible; JTypoSquatting/2.0)` | User-Agent of the checks and of the browser |
 
 The desktop launcher raises the scan quotas (single trusted user).
-To protect sign-up against bots, enable reCAPTCHA in the Keycloak registration flow
-(*Authentication → registration → reCAPTCHA*, with the site keys of your domain).
 
-### 6.2 Error Response Format
-
-```json
-{
-  "error": "Error message description"
-}
-```
-
-### 6.3 Common Errors
-
-| Error | Cause | Resolution |
-|-------|-------|------------|
-| `Invalid domain name provided` | Malformed domain | Check domain format |
-| `Cannot connect to API server` | Backend not running | Start backend service |
-| `Analysis failed: Timeout` | Domain check timeout | Normal for dead domains |
-| `Server error: Required files not found` | Missing algorithm files | Reinstall application |
+To protect sign-up against bots, enable reCAPTCHA in the Keycloak registration flow (*Authentication →
+registration → reCAPTCHA*, with the site keys of your domain).
 
 ---
 
 ## 7. Server-Sent Events
 
-### 7.1 SSE Protocol
+### 7.1 Protocol
 
-Server-Sent Events provide a unidirectional real-time communication channel from server to client.
+Each event is a block of lines separated by an empty line:
 
-**Connection:**
+```
+id:1234
+event:result
+data:{"id":1234,"domain":"exmple.com",…}
 
-```http
-GET /api/generate-and-check?domain=www.example.com
-Accept: text/event-stream
-Cache-Control: no-cache
+: keep-alive
+
+event:end
+data:{"id":"3f0c…","status":"COMPLETED",…}
 ```
 
-**Server Response:**
-
-```http
-HTTP/1.1 200 OK
-Content-Type: text/event-stream
-Cache-Control: no-cache
-Connection: keep-alive
-
-event: domainUpdate
-id: 1709567890123
-data: {"domain":"www.examp1e.com",...}
-```
-
-### 7.2 Event Types
-
-| Event Name | Description | Payload |
-|------------|-------------|---------|
-| `domainUpdate` | Domain status update | DomainResultDTO |
-| `error` | Error occurred | Error message |
-
-### 7.3 Client Implementation (JavaScript)
+### 7.2 Browser client
 
 ```javascript
-const eventSource = new EventSource(
-  'http://localhost:8080/api/generate-and-check?domain=www.example.com'
-);
-
-eventSource.addEventListener('domainUpdate', (event) => {
-  const data = JSON.parse(event.data);
-  console.log('Domain update:', data);
-  // Update UI with new domain status
+const source = new EventSource(`/api/scans/${id}/events`, { withCredentials: true });
+const seen = new Set();
+source.addEventListener("result", (e) => {
+  const result = JSON.parse(e.data);
+  if (seen.has(result.id)) return;      // may be sent again after a reconnection
+  seen.add(result.id);
+  addRow(result);
 });
-
-eventSource.addEventListener('error', (event) => {
-  const error = JSON.parse(event.data);
-  console.error('SSE Error:', error);
-});
-
-eventSource.onerror = () => {
-  console.log('SSE connection closed');
-  eventSource.close();
+source.addEventListener("progress", (e) => showProgress(JSON.parse(e.data)));
+source.addEventListener("end", (e) => { showProgress(JSON.parse(e.data)); source.close(); });
+source.onerror = () => {
+  // CLOSED: refused by the server (401, 403…). Otherwise the browser reconnects by itself.
+  if (source.readyState === EventSource.CLOSED) showError();
 };
 ```
 
-### 7.4 Reconnection
+### 7.3 Reconnection
 
-SSE automatically reconnects if the connection is lost. The server can control reconnection timing:
-
-```
-retry: 3000
-```
+On reconnection, the browser sends the id of the last event received in `Last-Event-ID`. The server only
+sends the results with a greater id, so nothing is lost or repeated. A client that does not use
+`EventSource` can do the same with the header, or read the missing results with
+`GET /api/scans/{id}/results?after=…`.
 
 ---
 
 ## 8. Examples
 
-### 8.1 cURL Examples
-
-**Generate and Check Domains:**
+### 8.1 cURL, desktop mode (no login)
 
 ```bash
-curl -N "http://localhost:8080/api/generate-and-check?domain=www.example.com"
+curl -s -X POST localhost:8081/api/scans -H 'Content-Type: application/json' \
+     -d '{"baseDomain":"example.com"}'
+curl -N localhost:8081/api/scans/<id>/events
+curl -s 'localhost:8081/api/scans/<id>/results?after=0&limit=500'
+curl -s -X DELETE localhost:8081/api/scans/<id>
 ```
 
-**Cancel Analysis:**
+### 8.2 cURL, web mode (existing session)
+
+Log in with a browser, then copy its `SESSION` and `XSRF-TOKEN` cookies:
 
 ```bash
-curl "http://localhost:8080/api/cancel"
+COOKIES='SESSION=…; XSRF-TOKEN=…'
+curl -s -b "$COOKIES" https://<site>/api/me
+curl -s -b "$COOKIES" -H 'X-XSRF-TOKEN: <XSRF-TOKEN value>' -H 'Content-Type: application/json' \
+     -d '{"baseDomain":"example.com"}' https://<site>/api/scans
+curl -N -b "$COOKIES" https://<site>/api/scans/<id>/events
 ```
 
-**Analyze Single Domain:**
-
-```bash
-curl "http://localhost:8080/api/data/analyze?domain=www.example.com"
-```
-
-**Get Cached Domain:**
-
-```bash
-curl "http://localhost:8080/api/data/cached/www.example.com"
-```
-
-**Clear All Data:**
-
-```bash
-curl -X DELETE "http://localhost:8080/api/data/all"
-```
-
-### 8.2 Java RestClient Example
-
-```java
-HttpClient client = HttpClient.newHttpClient();
-HttpRequest request = HttpRequest.newBuilder()
-    .uri(URI.create("http://localhost:8080/api/generate-and-check?domain=www.example.com"))
-    .GET()
-    .build();
-
-client.sendAsync(request, HttpResponse.BodyHandlers.ofLines())
-    .thenApply(response -> response.body())
-    .forEach(line -> {
-        if (line.startsWith("data:")) {
-            String json = line.substring(5).trim();
-            DomainResultDTO result = gson.fromJson(json, DomainResultDTO.class);
-            // Process result
-        }
-    });
-```
-
-### 8.3 Python Example
+### 8.3 Python, reading every result page by page
 
 ```python
 import requests
 
-url = "http://localhost:8080/api/generate-and-check"
-params = {"domain": "www.example.com"}
-
-with requests.get(url, params=params, stream=True) as response:
-    for line in response.iter_lines():
-        if line.startswith(b"data:"):
-            data = json.loads(line[5:].decode())
-            print(f"Domain: {data['domain']}, Status: {data['status']}")
+session = requests.Session()
+session.cookies.update({"SESSION": "…"})
+after, results = 0, []
+while True:
+    page = session.get(f"{base}/api/scans/{scan_id}/results",
+                       params={"after": after, "limit": 500}).json()
+    if not page:
+        break
+    results += page
+    after = page[-1]["id"]
 ```
 
 ---
 
-## Appendix A: Status Values
+## Appendix A: Status values
 
-| Status | HTTP Code | Description |
-|--------|-----------|-------------|
-| `Testing...` | -1 | Check in progress |
-| `Suspicious` | 200 | Active with similar content |
-| `Safe` | 3xx-5xx | Active with different content |
-| `Dead` | 0 | No response |
-| `Timeout` | N/A | Check timed out |
-| `Unreachable` | N/A | Network error |
+| `status` | Meaning |
+|----------|---------|
+| `Suspicious` | The domain answers HTTP 200: a site is online |
+| `Safe` | The domain answers with another HTTP status (redirect, 403, 404…) |
+| `Unreachable` | No HTTP answer (unknown domain, refused connection, timeout, blocked destination) |
+| `Testing...` | Being checked (desktop stream only) |
+| `Active`, `Dead`, `Unknown` | Reserved |
 
----
+## Appendix B: Monitoring endpoints
 
-## Appendix B: Homoglyph Mappings
+The `api` and `worker` instances expose these endpoints on port 8082, which the reverse proxy never
+routes:
 
-See [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md#homoglyph-mappings) for complete character mapping table.
+- `/actuator/health`, `/actuator/health/liveness`, `/actuator/health/readiness`;
+- `/actuator/info`;
+- `/actuator/prometheus`.
 
----
+See [DEPLOYMENT.md](DEPLOYMENT.md#monitoring).
 
 ## Appendix C: Changelog
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 2.0-alpha1 | March 2025 | Initial API documentation |
-
----
-
-*End of Document*
+| Version | Changes |
+|---------|---------|
+| 2.0-alpha1 (web service) | OpenID Connect login (PKCE, `SESSION` cookie, CSRF); persistent scans (`/api/scans`) processed by workers; per-scan SSE with `Last-Event-ID`; targeted cancellation; shared check cache; screenshots in S3-compatible storage (`/api/screenshots`); data export and account deletion (`/api/me`); rate limiting and quotas (429); TLS status of each domain; up to 50 000 domains per scan; desktop endpoints restricted to local mode |
+| 2.0-alpha1 (desktop) | `/api/generate-and-check` SSE stream, `/api/data/*` stored pages, Swing client |

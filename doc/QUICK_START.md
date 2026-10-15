@@ -1,92 +1,123 @@
-# JTypoSquatting - Guide de Démarrage Rapide
+# JTypoSquatting — Quick Start
 
-**Version :** 2.0-alpha1  
-**Temps avant premier lancement :** ~5 minutes
+**Version:** 2.0-alpha1
 
-> [!IMPORTANT]
-> **JTypoSquatting est désormais une application tout-en-un.**
-> Le backend et le frontend sont embarqués dans le même JAR et démarrent simultanément.
+JTypoSquatting comes in two forms:
+
+- **the web service**: several users, OpenID Connect login, Next.js interface;
+- **the desktop application**: a single user, Swing window, everything in one JAR.
 
 ---
 
-## Démarrage rapide
+## Requirements
 
-Lancez simplement l'application :
+| Tool | Version | For |
+|------|---------|-----|
+| Java (JDK) | 21 to 24 (Gradle 9.0 does not run on Java 25) | Backend, desktop application |
+| Node.js | 22 | Web frontend |
+| Docker or Podman | recent | Keycloak (and MySQL if needed) in development, Testcontainers tests |
+
+Headless Chromium takes the screenshots. Install it once:
 
 ```bash
-java -jar JTypoSquatting.jar
+./gradlew :backend:installPlaywrightBrowsers
 ```
 
-Si le backend a besoin de ports spécifiques ou de configuration, ils sont gérés automatiquement ou via le fichier `application.properties`.
-
----
-
-## Build depuis les sources
+Without Chromium, scans still run, but without screenshots.
 
 ```bash
-# 1. Cloner
-git clone https://github.com/hernic/JTypoSquatting.git
+git clone https://github.com/dagga/JTypoSquatting.git
 cd JTypoSquatting
-
-# 2. Compiler et packager
-./gradlew clean build :frontend:copyFatJar
-
-# 3. Lancer
-java -jar JTypoSquatting.jar
 ```
 
 ---
 
-## Première analyse de domaine
-
-1. **Saisir le domaine** (ex. `www.google.com`) dans le champ en haut
-2. Cliquer sur **Générer**
-3. Regarder les résultats s'afficher en temps réel :
-   ```
-   Générés : 150 | Suspects : 45 | Inaccessibles : 105
-   ```
-4. **Double-cliquer** sur un domaine pour voir les détails (screenshot, headers HTTP, métadonnées)
-
----
-
-## Résolution des problèmes courants
-
-### "Java not found" / "Commande introuvable"
-
-Java 21+ n'est pas installé.
+## Web service (development)
 
 ```bash
-# Ubuntu/Debian
-sudo apt install openjdk-21-jdk
+# 1. Identity provider: Keycloak on http://localhost:8180
+#    (realm jtypo, user alice / alice, administration admin / admin)
+docker compose up -d keycloak          # or: podman compose up -d keycloak
 
-# Vérification
-java -version
+# 2. Backend: API and worker in one process on :8081, in-memory H2 database
+FORWARD_HEADERS_STRATEGY=framework ./gradlew :backend:bootRun
+
+# 3. Frontend on http://localhost:3000 (/api, /oauth2, /login and /logout are forwarded to :8081)
+cd web
+npm install
+npm run dev
 ```
 
-### Pas de screenshots
+Open http://localhost:3000, click **Log in** (`alice` / `alice`), then start a scan from **My scans**.
 
-- Installer Chromium (une seule fois) : `./gradlew :backend:installPlaywrightBrowsers`
-- Si Chromium refuse de démarrer à cause du sandbox (namespaces utilisateur désactivés), passer `jtypo.screenshot.chromium-sandbox=false` uniquement dans un conteneur isolé
-- Consulter les logs backend dans l'onglet **Backend** de l'interface
+- `FORWARD_HEADERS_STRATEGY=framework` makes the login come back to port 3000 rather than 8081.
+- Use `localhost`, not the IP address of the machine: Keycloak only accepts the return URLs
+  `localhost:3000`, `localhost:3001`, `localhost:8081` and `localhost`.
+- If port 3000 is taken, run `npx next dev -p 3001`: that port is allowed too.
 
----
-
-## Référence rapide
+**With MySQL instead of H2:**
 
 ```bash
-# Lancer l'application
-java -jar JTypoSquatting.jar
+docker compose up -d mysql
+DB_URL=jdbc:mysql://localhost:3306/jtypo DB_USER=jtypo DB_PASSWORD=jtypo-dev \
+FORWARD_HEADERS_STRATEGY=framework ./gradlew :backend:bootRun
+```
 
-# Build complet
-./gradlew clean build :frontend:copyFatJar
+Flyway creates the schema at startup.
 
-# Tests (sans accès Internet ; MySQL et S3 via Testcontainers si Docker/Podman est disponible)
-./gradlew test
+---
 
-# Avec les tests qui contactent de vrais sites
-./gradlew test -Dinclude.network=true
+## Desktop application
+
+```bash
+./gradlew :frontend:fatJar
+java -jar frontend/build/libs/JTypoSquatting.jar
+```
+
+The JAR starts the backend in *local* mode (API on 127.0.0.1:8081, no login), then opens the window.
+
+1. Type a domain (e.g. `example.com`) and start the scan.
+2. Results appear live.
+3. Double-click a domain to see its screenshot, HTTP headers and metadata.
+
+---
+
+## A scan in brief
+
+- About 1 800 variants are generated for `example.com`, by 21 algorithms. A scan checks at most 50 000
+  domains.
+- Each variant is contacted: HTTP response, TLS certificate, title, language, screenshot.
+- A check less than 24 hours old is taken from the cache, unless you tick "Ignore the cache".
+- Per-user quotas on the web service: 2 simultaneous scans and 50 per 24 hours.
+
+---
+
+## Tests
+
+```bash
+./gradlew test                          # Backend, without Internet access
+./gradlew test -Dinclude.network=true   # Also the tests that contact real websites
+
+cd web
+npm run lint && npm run typecheck
+npm run test:e2e                        # Playwright, production build, simulated backend
+```
+
+The MySQL and S3 tests (Testcontainers) only run when Docker or Podman is available. With rootless Podman:
+
+```bash
+systemctl --user start podman.socket
+DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock TESTCONTAINERS_RYUK_DISABLED=true ./gradlew test
 ```
 
 ---
 
-*Pour la documentation complète, voir le répertoire [doc/](.).*
+## If something goes wrong
+
+| Symptom | Lead |
+|---------|------|
+| `java: command not found`, or Gradle refuses the JDK | Install a JDK 21–24; check `org.gradle.java.home` in `gradle.properties` |
+| No screenshots | `./gradlew :backend:installPlaywrightBrowsers` |
+| Login fails or loops | Go through `localhost:3000`; check that Keycloak runs on 8180 |
+
+More details: [TROUBLESHOOTING.md](TROUBLESHOOTING.md). Deployment: [DEPLOYMENT.md](DEPLOYMENT.md).
