@@ -1,6 +1,6 @@
 # JTypoSquatting - Functional Architecture
 
-**Version:** 2.0-alpha1
+**Version:** 2.0
 **Last Updated:** October 2026 (branch `feature/web-public`)
 
 ---

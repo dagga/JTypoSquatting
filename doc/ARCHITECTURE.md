@@ -1,6 +1,6 @@
 # JTypoSquatting - Software Architecture
 
-**Version:** 2.0-alpha1 (branch `feature/web-public`)
+**Version:** 2.0
 **See also:** [Technical architecture](TECHNICAL_ARCHITECTURE.md) (detailed, with UML diagrams) · [API](API.md) · [Deployment](DEPLOYMENT.md)
 
 ---

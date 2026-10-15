@@ -1,4 +1,4 @@
-# Technical Architecture — JTypoSquatting v2.0-alpha1
+# Technical Architecture — JTypoSquatting v2.0
 
 Detailed architecture reference of **JTypoSquatting** (branch `feature/web-public`), with UML diagrams.
 JTypoSquatting detects typosquatting of domain names, for security analysts and brand protection teams.

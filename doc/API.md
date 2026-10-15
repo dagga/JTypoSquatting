@@ -1,6 +1,6 @@
 # JTypoSquatting — API Documentation
 
-**Version:** 2.0-alpha1
+**Version:** 2.0
 **Last updated:** October 2026
 **Base URL:** `http://localhost:8081/api` (development and desktop). In production, the reverse proxy serves
 the API on the same origin as the frontend: `https://<site>/api`.
@@ -548,5 +548,5 @@ See [DEPLOYMENT.md](DEPLOYMENT.md#monitoring).
 
 | Version | Changes |
 |---------|---------|
-| 2.0-alpha1 (web service) | OpenID Connect login (PKCE, `SESSION` cookie, CSRF); persistent scans (`/api/scans`) processed by workers; per-scan SSE with `Last-Event-ID`; targeted cancellation; shared check cache; screenshots in S3-compatible storage (`/api/screenshots`); data export and account deletion (`/api/me`); rate limiting and quotas (429); TLS status of each domain; up to 50 000 domains per scan; desktop endpoints restricted to local mode |
+| 2.0 (web service) | OpenID Connect login (PKCE, `SESSION` cookie, CSRF); persistent scans (`/api/scans`) processed by workers; per-scan SSE with `Last-Event-ID`; targeted cancellation; shared check cache; screenshots in S3-compatible storage (`/api/screenshots`); data export and account deletion (`/api/me`); rate limiting and quotas (429); TLS status of each domain; up to 50 000 domains per scan; desktop endpoints restricted to local mode |
 | 2.0-alpha1 (desktop) | `/api/generate-and-check` SSE stream, `/api/data/*` stored pages, Swing client |

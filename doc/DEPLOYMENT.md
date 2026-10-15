@@ -1,6 +1,6 @@
 # JTypoSquatting — Deployment Guide
 
-**Version:** 2.0-alpha1
+**Version:** 2.0
 
 ## Table of Contents
 
@@ -313,8 +313,8 @@ Java runtime. Each installer is built on its target system.
 | Command | Output | Requires |
 |---------|--------|----------|
 | `./gradlew :frontend:packageApp` | `dist/JTypoSquatting/` (application image) | — |
-| `./gradlew :frontend:packageAppMsi` | `dist/JTypoSquatting-2.0-alpha1.msi` | Windows, WiX Toolset 3.x |
-| `./gradlew :frontend:packageAppExe` | `dist/JTypoSquatting-2.0-alpha1.exe` | Windows, WiX Toolset 3.x |
+| `./gradlew :frontend:packageAppMsi` | `dist/JTypoSquatting-2.0.msi` | Windows, WiX Toolset 3.x |
+| `./gradlew :frontend:packageAppExe` | `dist/JTypoSquatting-2.0.exe` | Windows, WiX Toolset 3.x |
 
 Installers do not contain Chromium. Install it once after installation
 (`java -cp JTypoSquatting.jar com.microsoft.playwright.CLI install chromium`), otherwise scans run without
@@ -347,8 +347,8 @@ Tests that contact real websites (`@Tag("network")`) do not run in CI. Run them 
 
 ```bash
 # version=… in gradle.properties, then:
-git tag v2.0-alpha1
-git push origin v2.0-alpha1
+git tag v2.0
+git push origin v2.0
 ```
 
 The release contains `JTypoSquatting-<version>.jar` and `JTypoSquatting.jar`.

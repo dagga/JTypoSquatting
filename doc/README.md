@@ -1,6 +1,6 @@
 # JTypoSquatting documentation
 
-**Version:** 2.0-alpha1. The project overview, the list of generation algorithms and the quick starts are
+**Version:** 2.0. The project overview, the list of generation algorithms and the quick starts are
 in the [README](../README.md) at the project root.
 
 JTypoSquatting comes in two forms:
