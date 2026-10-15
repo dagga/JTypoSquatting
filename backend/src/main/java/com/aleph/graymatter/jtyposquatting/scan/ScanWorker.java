@@ -59,7 +59,7 @@ public class ScanWorker {
 
     public ScanWorker(ScanRepository scans, ScanResultRepository results, DomainChecker domainChecker, MeterRegistry meters,
                       @Value("${jtypo.worker.max-concurrent-scans:4}") int maxConcurrentScans,
-                      @Value("${jtypo.quota.max-domains-per-scan:3000}") int maxDomainsPerScan,
+                      @Value("${jtypo.quota.max-domains-per-scan:50000}") int maxDomainsPerScan,
                       @Value("${jtypo.worker.heartbeat-interval-ms:5000}") long heartbeatIntervalMillis,
                       @Value("${jtypo.worker.stale-after-ms:120000}") long staleAfterMillis) {
         this.scans = scans;

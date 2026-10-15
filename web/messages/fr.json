@@ -39,7 +39,7 @@
       "keyboard": "Clavier",
       "keyboardText": "Touches voisines sur les claviers QWERTY et AZERTY : wxample.com, gppgle.com.",
       "visual": "Homoglyphes",
-      "visualText": "Caractères visuellement identiques d'autres alphabets : ехаmple.com (cyrillique).",
+      "visualText": "Caractères qui se ressemblent : lettres accentuées, chiffres et suites de lettres (éxample.com, examp1e.com, exarnple.com).",
       "separators": "Points et tirets",
       "separatorsText": "Tirets ajoutés ou retirés, points oubliés ou ajoutés : ex-ample.com, wwwexample.com, ex.ample.com.",
       "words": "Mots",
@@ -57,7 +57,7 @@
     "q2": "Combien d'analyses puis-je lancer ?",
     "a2": "Deux analyses simultanées et cinquante par période de 24 heures, pour garantir un service équitable.",
     "q3": "Pourquoi certains domaines s'affichent-ils avec des caractères étranges ?",
-    "a3": "Ce sont des homoglyphes : des caractères d'autres alphabets identiques à l'œil nu. La forme technique (punycode, xn--…) est aussi affichée.",
+    "a3": "Ce sont des homoglyphes : des caractères qui se ressemblent (é et e, 1 et l, rn et m). La forme technique (punycode, xn--…) est aussi affichée pour les domaines internationalisés.",
     "q4": "Que signifie un certificat « non fiable » ?",
     "a4": "Le site présente un certificat auto-signé, expiré ou émis pour un autre nom. C'est fréquent sur les domaines frauduleux."
   },
