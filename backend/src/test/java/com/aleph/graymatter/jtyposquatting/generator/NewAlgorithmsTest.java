@@ -103,6 +103,10 @@ class NewAlgorithmsTest {
         assertTrue(generate(Algorithm.CHANGE_DOT_DASH, "www.example.com").contains("www-example.com"));
         // Supprimer le seul point produirait un nom sans TLD : rien de valide
         assertTrue(generate(Algorithm.MISSING_DOT, "example.com").isEmpty());
+        // L'extension collée au libellé ne donne pas un domaine enregistrable
+        assertFalse(generate(Algorithm.MISSING_DOT, "www.example.com").contains("www.examplecom"));
+        assertFalse(generate(Algorithm.CHANGE_DOT_DASH, "www.example.com").contains("www.example-com"));
+        assertTrue(generate(Algorithm.CHANGE_DOT_DASH, "example.co.uk").contains("example-co.uk"));
     }
 
     @Test
