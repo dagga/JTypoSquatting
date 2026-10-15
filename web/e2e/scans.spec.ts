@@ -135,3 +135,30 @@ test("une analyse d'un autre utilisateur affiche une erreur", async ({ page }) =
   await page.goto("/fr/app/scans/other");
   await expect(page.getByRole("main").getByRole("alert")).toHaveText("Cette analyse ne vous appartient pas.");
 });
+
+test("chaque résultat n'apparaît qu'une fois, même renvoyé ou avec un chargement lent", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
+  const results = [result(1, "a.com"), result(2, "b.com"), result(3, "c.com")];
+  await mockBackend(page, {
+    scans: [scan()],
+    events: {
+      "scan-1": sse([
+        ...results.map((r) => ({ event: "result", id: r.id, data: r })),
+        // Renvoyé après une reconnexion
+        { event: "result", id: 2, data: results[1] },
+        { event: "end", data: scan({ status: "COMPLETED", checkedDomains: 3 }) },
+      ]),
+    },
+  });
+  // Chargement lent de l'analyse : le flux s'ouvre après un éventuel démontage (double montage de StrictMode)
+  await page.route("**/api/scans/scan-1", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await route.fulfill({ json: scan() });
+  });
+  await page.goto("/fr/app/scans/scan-1");
+
+  await expect(page.getByText("Terminée")).toBeVisible();
+  await expect(page.getByRole("row")).toHaveCount(4);
+  expect(errors.filter((e) => e.includes("same key"))).toEqual([]);
+});

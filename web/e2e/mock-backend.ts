@@ -57,7 +57,9 @@ export async function mockBackend(page: Page, options: MockOptions = {}) {
   const requests: { method: string; url: string; headers: Record<string, string>; body: string | null }[] = [];
   const loggedIn = options.loggedIn ?? true;
 
-  await page.context().addCookies([{ name: "XSRF-TOKEN", value: "csrf-123", url: "http://localhost:3100" }]);
+  await page.context().addCookies([
+    { name: "XSRF-TOKEN", value: "csrf-123", url: process.env.E2E_BASE_URL ?? "http://localhost:3100" },
+  ]);
 
   await page.route(/\/(api|logout|oauth2)\b/, async (route) => {
     const request = route.request();
