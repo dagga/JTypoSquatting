@@ -1,8 +1,9 @@
 # GitHub Actions Workflow for JTypoSquatting
 # Builds and publishes the executable JAR on releases
 #
-# Note: JavaFX screenshot capture requires a display. In headless CI environments,
-# Xvfb (X Virtual Framebuffer) is used to provide a virtual display.
+# Note: screenshots use headless Chromium (Playwright), no display is required.
+# gradle.properties may point org.gradle.java.home to a developer JDK: every Gradle call
+# below uses the JDK installed by actions/setup-java instead.
 
 name: Build and Release
 
@@ -33,34 +34,15 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Install Xvfb for headless JavaFX testing
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-
-    - name: Set up virtual display for JavaFX
-      run: |
-        # Start Xvfb on display :99
-        Xvfb :99 -screen 0 1280x1024x24 &
-        export DISPLAY=:99
-        echo "DISPLAY=:99" >> $GITHUB_ENV
-        echo "JavaFX configured with DISPLAY=:99"
-        sleep 2  # Wait for Xvfb to start
-
-    - name: Verify Xvfb is running
-      run: |
-        ps aux | grep Xvfb
-        echo "DISPLAY is: $DISPLAY"
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Run tests with Xvfb
-      run: |
-        # Run tests with virtual display
-        export DISPLAY=:99
-        echo "Running tests with DISPLAY=$DISPLAY"
-        ./gradlew test --no-daemon --info --stacktrace
+    - name: Install headless Chromium and its system dependencies
+      run: ./gradlew :backend:installPlaywrightBrowsers -PwithDeps --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
+
+    # Testcontainers (MySQL, S3Mock) use the Docker engine of the runner
+    - name: Run tests
+      run: ./gradlew test --no-daemon -Dorg.gradle.java.home="$JAVA_HOME" --info --stacktrace
 
     - name: Upload test reports
       if: always()
@@ -70,6 +52,46 @@ jobs:
         path: |
           **/build/reports/tests/
           **/build/test-results/
+        retention-days: 7
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js 22
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: web/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Type check
+      run: npm run typecheck
+
+    - name: Install Chromium for end-to-end tests
+      run: npx playwright install --with-deps chromium
+
+    - name: End-to-end tests (production build, simulated backend)
+      run: npm run test:e2e
+
+    - name: Upload Playwright report
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: web/test-results/
         retention-days: 7
 
   build:
@@ -87,32 +109,14 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Install Xvfb for headless JavaFX build
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-
-    - name: Set up virtual display for JavaFX
-      run: |
-        Xvfb :99 -screen 0 1280x1024x24 &
-        export DISPLAY=:99
-        echo "DISPLAY=:99" >> $GITHUB_ENV
-        echo "JavaFX configured with DISPLAY=:99"
-        sleep 2
-
-    - name: Verify Xvfb is running
-      run: |
-        ps aux | grep Xvfb
-        echo "DISPLAY is: $DISPLAY"
-
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: DISPLAY=:99 ./gradlew clean build --no-daemon
+      run: ./gradlew clean build -x test --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
     - name: Build optimized fat JAR
-      run: DISPLAY=:99 ./gradlew :frontend:fatJar --no-daemon
+      run: ./gradlew :frontend:fatJar --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
     - name: Get version from gradle.properties
       id: version
@@ -146,6 +150,65 @@ jobs:
         prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  images:
+    runs-on: ubuntu-latest
+    needs: [test, web]
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: .
+            file: backend/Dockerfile
+            target: api
+          - name: worker
+            context: .
+            file: backend/Dockerfile
+            target: worker
+          - name: web
+            context: web
+            file: web/Dockerfile
+            target: run
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to GitHub Container Registry
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Image tags
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository_owner }}/jtyposquatting-${{ matrix.name }}
+        tags: |
+          type=ref,event=branch
+          type=semver,pattern={{version}}
+          type=sha
+
+    - name: Build (and push outside pull requests)
+      uses: docker/build-push-action@v6
+      with:
+        context: ${{ matrix.context }}
+        file: ${{ matrix.file }}
+        target: ${{ matrix.target }}
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha,scope=${{ matrix.name }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   analyze-jar-size:
     runs-on: ubuntu-latest

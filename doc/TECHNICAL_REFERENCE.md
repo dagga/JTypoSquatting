@@ -1,7 +1,7 @@
 # JTypoSquatting - Technical Reference
 
-**Version:** 2.0-alpha1  
-**Last Updated:** March 2025
+**Version:** 2.0-alpha1
+**Last Updated:** October 2026 (branch `feature/web-public`)
 
 ---
 
@@ -9,613 +9,301 @@
 
 1. [Code Organization](#1-code-organization)
 2. [Domain Generation Algorithms](#2-domain-generation-algorithms)
-3. [Homoglyph Mappings](#3-homoglyph-mappings)
-4. [Misspell Patterns](#4-misspell-patterns)
-5. [TLD Lists](#5-tld-lists)
-6. [Class Reference](#6-class-reference)
-7. [Database Schema](#7-database-schema)
-8. [Configuration Reference](#8-configuration-reference)
-9. [Performance Tuning](#9-performance-tuning)
-10. [Development Guidelines](#10-development-guidelines)
+3. [Domain Checks](#3-domain-checks)
+4. [Class Reference](#4-class-reference)
+5. [Database Schema](#5-database-schema)
+6. [Configuration Reference](#6-configuration-reference)
+7. [Development Guidelines](#7-development-guidelines)
 
 ---
 
 ## 1. Code Organization
 
-### 1.1 Project Structure
-
 ```
 JTypoSquatting/
-├── backend/
-│   └── src/main/java/com/aleph/graymatter/jtyposquatting/
-│       ├── controller/           # REST controllers
-│       │   ├── TypoSquattingController.java
-│       │   └── DomainDataController.java
-│       ├── service/              # Business logic
-│       │   ├── DomainCheckService.java
-│       │   └── PageAnalyzer.java
-│       ├── db/                   # Database access
-│       │   └── DatabaseService.java
-│       └── JTypoSquattingApplication.java
-│
-├── frontend/
-│   └── src/main/java/com/aleph/graymatter/jtyposquatting/
-│       ├── ui/                   # Swing components
-│       │   ├── JTypoFrame.java
-│       │   ├── DomainStreamingService.java
-│       │   ├── PreviewPanel.java
-│       │   ├── LogPanel.java
-│       │   ├── DomainDetailsDialog.java
-│       │   └── renderers/
-│       ├── client/               # REST client
-│       │   └── JTypoSquattingRestClient.java
-│       ├── config/               # Configuration
-│       │   ├── ClientConfig.java
-│       │   └── ConfigManager.java
-│       └── Main.java
-│
-├── shared/
-│   └── src/main/java/com/aleph/graymatter/jtyposquatting/
-│       ├── JTypoSquatting.java   # Domain generation
-│       └── dto/                  # Data Transfer Objects
-│           ├── DomainResultDTO.java
-│           └── DomainPageDTO.java
-│
-├── doc/                          # Documentation
-├── scripts/                      # Utility scripts
-└── build.gradle                  # Build configuration
+├── shared/    DTOs and domain name model (com.aleph.graymatter.jtyposquatting.{dto,net})
+├── backend/   Spring Boot application (com.aleph.graymatter.jtyposquatting.*)
+│   └── src/main/resources/
+│       ├── application*.properties   Configuration (default, api, worker profiles)
+│       ├── db/migration/{mysql,h2}/  Flyway migrations, one set per database vendor
+│       ├── TLD.txt                   1436 top-level domains (wrongTld, addTld)
+│       ├── common-misspellings.json  4291 misspelled → correct word pairs (commonMisspelling)
+│       └── dynamic-dns.json          Dynamic DNS warning list (consistency check of addDynamicDns)
+├── frontend/  Swing desktop client and the all-in-one JAR (CombinedLauncher)
+├── web/       Next.js frontend of the web service
+└── deploy/    Production compose, nginx, Prometheus, Keycloak realm, backup scripts
 ```
 
-### 1.2 Module Dependencies
-
-```
-┌──────────────┐
-│   Frontend   │
-└──────┬───────┘
-       │ depends on
-       ▼
-┌──────────────┐
-│    Shared    │◄──────┐
-└──────────────┘       │
-       ▲               │ depends on
-       │               ▼
-       └─────────┌──────────────┐
-                 │   Backend    │
-                 └──────────────┘
-```
+The same backend artifact runs as an **API** instance, a **worker** instance (Spring profiles `api`,
+`worker`) or as the backend of the desktop application (`jtypo.security.mode=local`).
 
 ---
 
 ## 2. Domain Generation Algorithms
 
-### 2.1 Dash Operations
+### 2.1 Registry and pipeline
 
-**File:** `shared/src/main/java/com/aleph/graymatter/jtyposquatting/JTypoSquatting.java`
+Every algorithm is declared in the `generator.Algorithm` enum, bound to its implementation. For a scan,
+`JTypoSquatting` applies all 21 algorithms to the scanned domain:
+1. It merges the results and removes duplicates and the scanned domain itself.
+2. The worker converts each candidate to its ASCII/punycode form (`DomainKeys`).
+3. The worker keeps at most `jtypo.quota.max-domains-per-scan` candidates (**50 000** by default).
 
-```java
-// Add dash between each character pair
-"example" → "e-xample", "ex-ample", "exa-mple", ...
+**Volume:** a domain currently produces about **1 800 candidates**: 1780 for `example.com`, 1891 for
+`examplebrand.com`, 1657 for `www.mybank.co.uk`. `wrongTld` alone accounts for about 1435 of them.
 
-// Remove existing dashes
-"ex-ample" → "example"
+**Shared helpers:**
+- `DomainParts` splits a name with the Public Suffix List into subdomain, registrable label and suffix,
+  so `www.example.co.uk` gives `www` / `example` / `co.uk`. The newer generators (`CharacterEdits`,
+  `Keyboard`, `DotDash`, `Words`, `Suffixes`) only change the label and keep the subdomain and the suffix.
+- The original generators (`Dash`, `Homoglyph`, `Misspell`, `TLD`) work on everything before the last
+  label.
+- Every candidate goes through `DomainName` validation (Guava `InternetDomainName`), and invalid names are
+  dropped.
 
-// Move dash positions
-"ex-ample" → "e-xample", "exa-mple", ...
-```
+The examples below come from the generators themselves (run on the current code).
 
-**Implementation:**
+### 2.2 The 21 algorithms
 
-```java
-private void addDashVariants(String domain, List<String> variants) {
-    String name = extractDomainName(domain);
-    for (int i = 1; i < name.length(); i++) {
-        String variant = name.substring(0, i) + "-" + name.substring(i);
-        variants.add(variant + getTLD(domain));
-    }
-}
-```
+#### Characters — `CharacterEdits`
 
-### 2.2 Homoglyph Substitution
+| Id | What it generates | Why it is a realistic mistake | Example |
+|----|-------------------|-------------------------------|---------|
+| `omission` | Each character of the label removed in turn | A key not pressed hard enough | `example.com` → `exmple.com`, `xample.com` |
+| `repetition` | Each character typed twice (dashes excluded) | Key bounce, double press | `example.com` → `exxample.com`, `exammple.com` |
+| `changeOrder` | Two adjacent different characters swapped | Fingers in the wrong order | `example.com` → `exmaple.com`, `exampel.com` |
+| `addition` | One character among a–z and 0–9 appended at the end of the label | Extra key at the end of typing | `example.com` → `examplea.com`, `example1.com` |
+| `vowelSwap` | Each vowel (`aeiouy`) replaced by every other vowel | Phonetic confusion | `example.com` → `exemple.com`, `axample.com` |
 
-**Algorithm:**
+#### Keyboard — `Keyboard`
 
-```
-For each character in domain:
-  For each homoglyph of character:
-    Create variant with substitution
-    Recursively process remaining characters
-```
+Key adjacency is computed from the rows of the **QWERTY and AZERTY** layouts, digit row included, with
+staggered rows.
 
-**Complexity:** O(n × m) where n = domain length, m = avg homoglyphs per char
+| Id | What it generates | Why it is a realistic mistake | Example |
+|----|-------------------|-------------------------------|---------|
+| `replacement` | Each character replaced by a neighbouring key | Fat finger | `example.com` → `wxample.com`, `3xample.com`, `ezample.com` |
+| `doubleReplacement` | A doubled letter replaced by a doubled neighbouring key | The finger is misplaced on both strokes | `google.com` → `gppgle.com`, `g00gle.com` |
 
-### 2.3 Misspell Generation
+#### Dots and dashes — `Dash`, `DotDash`
 
-**Patterns Applied:**
+| Id | Class | What it generates | Why it is a realistic mistake | Example |
+|----|-------|-------------------|-------------------------------|---------|
+| `addDash` | `Dash` | A dash inserted between each pair of characters of the label | Branded names are often split | `example.com` → `ex-ample.com`, `exam-ple.com` |
+| `stripDash` | `Dash` | All dashes removed from the label | Users forget the dash | `my-example.com` → `myexample.com` |
+| `missingDot` | `DotDash` | One dot removed. Only names that still end with a public suffix are kept: `www.examplecom` is not generated. | The dot after `www` is forgotten | `www.example.com` → `wwwexample.com`; `example.co.uk` → `exampleco.uk` |
+| `subdomain` | `DotDash` | A dot inserted inside the label, not next to a dash | Looks like a subdomain of a shorter domain | `example.com` → `ex.ample.com`, `exam.ple.com` |
+| `changeDotDash` | `DotDash` | One dot typed as a dash. Same public-suffix filter as `missingDot`. | `-` and `.` are confused | `www.example.com` → `www-example.com`; `example.co.uk` → `example-co.uk` |
 
-| Pattern | Example | Count |
-|---------|---------|-------|
-| Double consonant | `absence` → `abbence` | ~50 |
-| Swap adjacent | `absence` → `absecne` | ~30 |
-| Silent letter drop | `absence` → `absnce` | ~20 |
-| Phonetic substitution | `absence` → `absense` | ~40 |
+#### Look-alike characters — `Homoglyph`
 
-### 2.4 TLD Variations
+| Id | What it generates | Why it is a realistic mistake | Example |
+|----|-------------------|-------------------------------|---------|
+| `homoglyph` | Each character replaced, **one at a time**, by look-alikes from `Const.SIMILAR_CHAR`: accented Latin letters, digits for letters and the reverse, letter pairs (`rn` for `m`, `vv` for `w`, `cl` for `d`) | Visually indistinguishable in an address bar or an e-mail | `example.com` → `éxample.com`, `exämple.com`, `examp1e.com`, `exarnple.com` (62 variants) |
 
-**Operations:**
+`SIMILAR_CHAR` holds **Latin look-alikes only**: no Cyrillic or Greek letters are generated (see § 2.3).
 
-1. **Replace TLD:** `example.eu` → `example.com`, `example.net`, ...
-2. **Add TLD suffix:** `example.eu` → `example.eu.com`
-3. **Country TLD:** Add common country TLDs (.fr, .de, .co.uk)
+#### Words — `Misspell`, `Words`
 
----
+| Id | Class | What it generates | Why it is a realistic mistake | Example |
+|----|-------|-------------------|-------------------------------|---------|
+| `commonMisspelling` | `Misspell` | Each correct word found in the name is replaced by its common misspellings (4291 pairs in `common-misspellings.json`; one word can have several misspellings) | Real spelling mistakes | `absence.com` → `absense.com`, `abscence.com` |
+| `homophones` | `Words` | A word of a homophone group (`Const.HOMOPHONES`, 41 groups such as for/four, to/too/two, hour/our) replaced by the other words of its group | Words that sound alike | `fourseasons.com` → `forseasons.com` |
+| `singularPluralize` | `Words` | A trailing `s` added or removed (`es` for labels ending in x, z, ch, sh) | Singular and plural are confused | `example.com` → `examples.com`; `examples.com` → `example.com` |
+| `numeralSwap` | `Words` | A digit written as a word (`Const.NUMERAL`) and the reverse | Spoken URLs are transcribed | `shop4you.com` → `shopforyou.com`, `shopfouryou.com`; `oneclick.com` → `1click.com` |
 
-## 3. Homoglyph Mappings
+#### Extensions — `TLD`, `Suffixes`
 
-### 3.1 Latin Character Homoglyphs
+| Id | Class | What it generates | Why it is a realistic mistake | Example |
+|----|-------|-------------------|-------------------------------|---------|
+| `wrongTld` | `TLD` | The extension replaced by each of the 1436 TLDs of `TLD.txt` | Wrong extension, or cheap registration under another TLD | `example.com` → `example.fr`, `example.de`, `example.co` (1435 variants) |
+| `addTld` | `Suffixes` | A two-letter country code appended, only when the result is a registrable public suffix | `example.com.br`-style suffixes exist in many countries | `example.com` → `example.com.br`, `example.com.au` (150 variants) |
+| `wrongSld` | `Suffixes` | The second level of a country suffix replaced by a common one (`Const.COMMON_SLD`: co, com, net, org, ac, gov…), only if the result is a public suffix | `co.uk` and `org.uk` are confused | `example.co.uk` → `example.org.uk`, `example.ac.uk` |
+| `addDynamicDns` | `Suffixes` | The label registered under 14 free dynamic DNS providers (`Const.DYNAMIC_DNS_PROVIDERS`, all present in `dynamic-dns.json`) | Free and anonymous hosting, often used by phishing kits | `example.com` → `example.duckdns.org`, `example.ddns.net` |
 
-| Character | Homoglyphs | Unicode |
-|-----------|------------|---------|
-| `a` | а (Cyrillic), ɑ (Latin alpha), Ꭺ (Cherokee) | U+0430, U+0251, U+13AA |
-| `b` | Ь (Cyrillic), Ƅ (Cyrillic) | U+042C, U+0484 |
-| `c` | с (Cyrillic), ϲ (Greek lunate) | U+0441, U+03F2 |
-| `e` | е (Cyrillic), ɛ (Latin epsilon), ἐ (Greek) | U+0435, U+025B, U+1F10 |
-| `i` | і (Cyrillic), ɩ (Latin iota), ι (Greek) | U+0456, U+0269, U+03B9 |
-| `l` | 1 (digit), I (uppercase i), | (pipe) | U+0031, U+0049, U+007C |
-| `o` | 0 (digit), ο (Greek omicron), о (Cyrillic) | U+0030, U+03BF, U+043E |
-| `p` | р (Cyrillic), ρ (Greek rho) | U+0440, U+03C1 |
-| `s` | ѕ (Cyrillic), ʂ (Latin hook) | U+0455, U+0282 |
-| `u` | ս (Armenian), υ (Greek upsilon) | U+057D, U+03C5 |
-| `x` | х (Cyrillic), χ (Greek chi) | U+0445, U+03C7 |
-| `y` | у (Cyrillic), γ (Greek gamma) | U+0443, U+03B3 |
+### 2.3 Algorithms still to develop
 
-### 3.2 Complete Mapping Table
+Reference tools such as dnstwist and URLCrazy cover techniques that are not implemented yet.
 
-```java
-// Partial mapping from JTypoSquatting.java
-private static final Map<Character, List<Character>> HOMOGLYPHS = Map.of(
-    'a', List.of('\u0430', '\u0251', '\u13AA'),      // а, ɑ, Ꭺ
-    'c', List.of('\u0441', '\u03F2'),                // с, ϲ
-    'e', List.of('\u0435', '\u025B'),                // е, ɛ
-    'i', List.of('\u0456', '\u0269', '\u03B9'),      // і, ɩ, ι
-    'o', List.of('\u043E', '\u03BF', '\u0030'),      // о, ο, 0
-    'p', List.of('\u0440', '\u03C1'),                // р, ρ
-    's', List.of('\u0455', '\u0282'),                // ѕ, ʂ
-    'x', List.of('\u0445', '\u03C7'),                // х, χ
-    'y', List.of('\u0443', '\u03B3'),                // у, γ
-    // ... full mapping in source code
-);
-```
+| Algorithm | What it would generate | Why it matters | Example |
+|-----------|------------------------|----------------|---------|
+| **Combosquatting** (dictionary) | The brand combined with words used in phishing (login, secure, support, account, pay…), with or without a dash, before or after | This is the most common pattern of current phishing domains | `example.com` → `example-login.com`, `secure-example.com` |
+| **Insertion** | A neighbouring key inserted before or after each character (`addition` only appends at the end) | A finger brushes the next key | `example.com` → `exsample.com` |
+| **Bitsquatting** | Each character with one bit flipped, when the result is a valid DNS character | Memory and transmission errors in devices | `example.com` → `dxample.com`, `uxample.com` |
+| **Homoglyphs from other alphabets / whole label** | Cyrillic or Greek look-alikes, and every look-alike letter replaced at once instead of one at a time | Internationalised names identical to the original | `example.com` → `ехаmрlе.com` (Cyrillic е, х, а, р, е) |
+| **Extension inside the label** | The extension glued to the label, then another extension | Survives a quick reading of the address | `example.com` → `examplecom.net`, `example-com.com` |
 
-### 3.3 Visual Similarity Matrix
+**To add an algorithm:**
+1. Write a static generator `(DomainName, List<DomainName>)` in the `generator` package. Use `DomainParts`
+   to keep the subdomain and the suffix.
+2. Declare it in `Algorithm`.
+3. Give it a sample domain in `NewAlgorithmsTest`, which checks that every declared algorithm produces
+   variants.
 
-```
-ASCII    Cyrillic   Greek    Visual Similarity
-------   --------   -----    -----------------
-a        а          α        High (identical in many fonts)
-c        с          ϲ        High
-e        е          ε        High
-i        і          ι        High
-o        о          ο        High
-p        р          ρ        High
-x        х          χ        High
-y        у          γ        Medium
-```
+Dictionary-based algorithms multiply the volume: the 50 000 cap per scan is sized for them.
 
 ---
 
-## 4. Misspell Patterns
+## 3. Domain Checks
 
-### 4.1 Common English Misspellings
+**Checking a candidate** (`scan.DomainChecker` → `service.DomainCheckService` → `service.PageAnalyzer`):
+1. **Shared cache.** If the domain was checked less than `jtypo.cache.ttl-hours` ago (24 h), by any user,
+   the cached result is reused (table `domain_checks`), unless the scan asks for `forceRefresh`.
+2. **Instance-wide cap.** At most `jtypo.analysis.max-concurrent-checks` (64) checks run at the same time
+   on an instance.
+3. **HTTP fetch** through Apache HttpClient 5:
+   - The DNS resolver (`GuardedDnsResolver`) rejects private, loopback, link-local, metadata, CGNAT,
+     reserved, multicast, NAT64, 6to4, Teredo and ULA addresses. The connection goes to the address that
+     was checked.
+   - Only http and https, and only ports 80/443, are allowed. They are checked again on each redirect
+     (5 at most).
+   - The body is read up to 2 MB.
+4. **TLS** is validated strictly. An invalid certificate is recorded as `TlsStatus` (`EXPIRED`,
+   `HOSTNAME_MISMATCH`, `UNTRUSTED`, `HANDSHAKE_FAILED`); the page is then fetched over plain HTTP.
+5. **Page content.** JSoup extracts the title, the meta description, keywords, author and Open Graph
+   tags, and the first 200 characters of text. Lingua detects the language among 12 languages: English,
+   French, German, Spanish, Italian, Portuguese, Dutch, Russian, Chinese, Japanese, Korean and Arabic.
+6. **Screenshot**, taken only for 2xx responses whose text has at least 5 characters:
+   - `PlaywrightScreenshotService` runs headless Chromium, with a fresh context per capture, downloads and
+     service workers disabled.
+   - Every request of the page goes through the same anti-SSRF policy.
+   - The PNG is stored by content hash in the `ScreenshotStore`: S3 or the file system.
 
-```java
-private static final Map<String, List<String>> MISSPELLINGS = Map.of(
-    "absence",    List.of("absense", "absences"),
-    "accommodate",List.of("acommodate", "accomodate"),
-    "accident",   List.of("acident", "accidently"),
-    "achieve",    List.of("acheive", "acheive"),
-    "acquire",    List.of("aquire", "acquistion"),
-    "address",    List.of("adress", "addres"),
-    "advice",     List.of("advise", "advisory"),
-    "affiliate",  List.of("afiliate", "affilliate"),
-    "against",    List.of("againts", "agnist"),
-    "algorithm",  List.of("algoritm", "algorithim"),
-    // ... 500+ common misspellings
-);
-```
+**Resulting status:**
 
-### 4.2 Pattern-Based Transformations
-
-| Pattern | Description | Example |
-|---------|-------------|---------|
-| **Double Letter** | Add extra consonant | `stop` → `stopp` |
-| **Swap Vowels** | Swap adjacent vowels | `ae` → `ea` |
-| **Silent H** | Drop or add H | `hour` → `our` |
-| **IE/EI** | Common confusion | `receive` → `recieve` |
-| **ABLE/IBLE** | Suffix confusion | `possible` → `possable` |
-
----
-
-## 5. TLD Lists
-
-### 5.1 Common TLDs
-
-```java
-private static final List<String> COMMON_TLDS = List.of(
-    ".com", ".net", ".org", ".info", ".biz",
-    ".eu", ".fr", ".de", ".es", ".it", ".nl",
-    ".co.uk", ".co.jp", ".com.au", ".com.br",
-    ".io", ".ai", ".app", ".dev", ".tech",
-    ".online", ".site", ".store", ".shop",
-    // ... 100+ common TLDs
-);
-```
-
-### 5.2 Country Code TLDs (ccTLD)
-
-| Code | Country | Usage |
-|------|---------|-------|
-| `.us` | United States | Common |
-| `.uk` | United Kingdom | Common |
-| `.de` | Germany | Common |
-| `.fr` | France | Common |
-| `.cn` | China | Common |
-| `.ru` | Russia | Common |
-| `.br` | Brazil | Common |
-| `.in` | India | Common |
-
-### 5.3 Typosquatting-Prone TLDs
-
-These TLDs are commonly used for typosquatting:
-
-| TLD | Reason |
-|-----|--------|
-| `.cm` | Typo of `.com` |
-| `.con` | Typo of `.com` |
-| `.comm` | Typo of `.com` |
-| `.om` | Typo of `.com` |
-| `.co` | Typo of `.com` |
-| `.omg` | Visual similarity |
+| HTTP code | Status |
+|-----------|--------|
+| 200 | `SUSPICIOUS` |
+| any other code > 0 (redirects, 403…) | `SAFE` |
+| 0 (DNS failure, connection refused, timeout, blocked destination) | `UNREACHABLE` |
 
 ---
 
-## 6. Class Reference
+## 4. Class Reference
 
-### 6.1 Core Classes
+Backend packages under `com.aleph.graymatter.jtyposquatting`:
 
-#### JTypoSquatting (Shared)
+| Package | Classes | Role |
+|---------|---------|------|
+| (root) | `JTypoSquattingApplication`, `JTypoSquatting` | Spring Boot entry point; applies the 21 algorithms |
+| `generator` | `Algorithm`, `DomainParts`, `CharacterEdits`, `Keyboard`, `Dash`, `DotDash`, `Homoglyph`, `Misspell`, `Words`, `Suffixes`, `TLD` | Generation (§ 2) |
+| `constants` | `Const` | Look-alike characters, numerals, homophones, dynamic DNS providers, common SLDs |
+| `scan` | `ScanService`, `ScanController`, `ScanWorker`, `ScanEventStreamer`, `DomainChecker`, `ScanRepository`, `ScanResultRepository`, `DomainCheckRepository`, `UserRepository`, `ScanQueueMetrics`, records `Scan`, `ScanResult`, `DomainCheck`, `ScanUser`, `ScanDTO`, `ScanResultDTO`, `ScanStatus`, exceptions | Web scans: creation and persistent quotas, worker queue (atomic claim, heartbeat, takeover), SSE, shared cache |
+| `security` | `OutboundPolicy`, `GuardedDnsResolver`, `BlockedDestinationException` | Anti-SSRF policy of every outbound connection, User-Agent |
+| `service` | `PageAnalyzer`, `DomainCheckService`, `ScreenshotService`, `PlaywrightScreenshotService` | HTTP/TLS analysis of a page, screenshots |
+| `storage` | `ScreenshotStore`, `S3ScreenshotStore`, `FileSystemScreenshotStore`, `StorageConfig`, `ScreenshotController`, `ScreenshotGarbageCollector` | Content-addressed screenshot storage, access-controlled download, deletion of unreferenced screenshots |
+| `abuse` | `RateLimitFilter`, `QuotaExceededException`, `QuotaExceptionHandler` | Request rate limit (Bucket4j), 429 responses with `Retry-After` |
+| `account` | `AccountService`, `AccountController` | GDPR: data export, account deletion |
+| `retention` | `RetentionService` | Nightly purge (workers only) |
+| `persistence` | `DomainKeys` | Stored form of a domain (lower-case punycode) ↔ Unicode form |
+| `config` | `SecurityConfig`, `LazyClientRegistrationRepository`, `JsonLogoutSuccessHandler`, `SchedulingConfig` | OIDC login with PKCE, CSRF, headers, `local` mode; lazy discovery; JSON logout; scheduling on workers |
+| `controller` | `UserController` (`GET /api/me`), `TypoSquattingController`, `DomainDataController` | The last two are the legacy API of the desktop application, loaded in `local` mode only |
+| `db` | `DatabaseService` | Legacy table `domain_page_data` of the desktop application |
 
-**Purpose:** Domain generation algorithms
-
-**Methods:**
-```java
-public JTypoSquatting(String domain) throws InvalidDomainException
-public ArrayList<String> getListOfDomains()
-private void addDashVariants(String domain, List<String> list)
-private void addHomoglyphVariants(String domain, List<String> list)
-private void addMisspellVariants(String domain, List<String> list)
-private void addTLDVariants(String domain, List<String> list)
-```
-
-#### DomainCheckService (Backend)
-
-**Purpose:** Check domain availability
-
-**Methods:**
-```java
-public DomainResultDTO checkDomain(String domain)
-private int checkHttpStatus(String url)
-private String fetchTitle(String url)
-private String detectLanguage(String content)
-```
-
-#### PageAnalyzer (Backend)
-
-**Purpose:** Full page analysis with screenshot
-
-**Methods:**
-```java
-public DomainPageDTO analyzePage(String domain)
-private byte[] captureScreenshot(URL url)
-private String extractMetadata(Document doc)
-```
-
-#### JTypoFrame (Frontend)
-
-**Purpose:** Main application window
-
-**Fields:**
-```java
-private final JTable jTableOutput
-private final DefaultTableModel tableModel
-private final JTextField jTextFieldConsole
-private final PreviewPanel previewPanel
-private final ConfigManager config
-```
-
-**Methods:**
-```java
-private void generateAndCheckDomains()
-private void processDomainUpdate(DomainResultDTO result)
-private void updateConsole()
-private void showDomainDetails()
-```
-
-#### DomainStreamingService (Frontend)
-
-**Purpose:** Handle SSE stream from backend
-
-**Methods:**
-```java
-public void startDomainChecks(String domain)
-public void cancelActiveStreamIfAny()
-private void scheduleTimeoutCheck(String domain)
-public int getActiveCount()
-public int getDeadCount()
-```
-
-### 6.2 DTOs
-
-#### DomainResultDTO
-
-```java
-public class DomainResultDTO {
-    private String domain;
-    private String status;
-    private String title;
-    private String language;
-    private String description;
-    private int httpCode;
-    private String screenshotBase64;  // Serialized as Base64
-    private transient byte[] screenshot;  // Deserialized
-    private String homepageText;
-    private Map<String, String> httpHeaders;
-}
-```
-
-#### DomainPageDTO
-
-```java
-public class DomainPageDTO extends DomainResultDTO {
-    private String metaDescription;
-    private String metaKeywords;
-    private String metaAuthor;
-    private String metaOgTitle;
-    private String metaOgDescription;
-    private String detectedLanguage;
-    private Timestamp timestamp;
-}
-```
+`shared` module:
+- `dto.DomainResultDTO`, `DomainPageDTO`, `DomainStatus`, `TlsStatus`, `GenerationRequestDTO` (body of
+  `POST /api/scans`);
+- `net.DomainName`;
+- `InvalidDomainException`.
 
 ---
 
-## 7. Database Schema
+## 5. Database Schema
 
-### 7.1 Table Definition
+Flyway applies `classpath:db/migration/{vendor}`: one set for **MySQL 8.4** (web service), one for **H2**
+(desktop application and fast tests). Both sets are kept in sync.
 
-```sql
-CREATE TABLE domain_results (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    domain VARCHAR(255) NOT NULL UNIQUE,
-    status VARCHAR(50),
-    title VARCHAR(500),
-    language VARCHAR(50),
-    description TEXT,
-    http_code INTEGER,
-    http_headers TEXT,
-    screenshot BLOB,
-    homepage_text TEXT,
-    meta_description TEXT,
-    meta_keywords TEXT,
-    meta_author TEXT,
-    meta_og_title TEXT,
-    meta_og_description TEXT,
-    detected_language VARCHAR(50),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+| Migration | Content |
+|-----------|---------|
+| V1 `web_schema` | `users`, `scans`, `domain_checks`, `scan_results` |
+| V2 `spring_session` | `SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES` (copied from spring-session-jdbc 3.5.0) |
+| V3 `legacy_domain_page_data` | `domain_page_data` (desktop application, to drop with the Swing client) |
+| V4 `screenshot_key_index` | Index on `scan_results.screenshot_key` (screenshot access control) |
 
-CREATE INDEX idx_domain ON domain_results(domain);
-CREATE INDEX idx_status ON domain_results(status);
-CREATE INDEX idx_timestamp ON domain_results(timestamp);
-```
+| Table | Key | Main columns |
+|-------|-----|--------------|
+| `users` | `id` (OIDC subject) | `username`, `email`, `created_at`, `last_seen_at` |
+| `scans` | `id` (UUID) | `user_id` → users (cascade), `base_domain` (punycode), `base_domain_unicode`, `status` (PENDING, RUNNING, COMPLETED, CANCELLED, FAILED), `force_refresh`, `total_domains`, `checked_domains`, `worker_id`, `heartbeat_at`, `created_at`, `started_at`, `finished_at`, `error`. The table is also the job queue. |
+| `domain_checks` | `domain` (punycode) | Shared cache: `status`, `http_code`, `tls_status`, `title`, `language`, `description`, `homepage_text`, `http_headers` (JSON), `screenshot_key`, `checked_at` |
+| `scan_results` | `id` (auto-increment, used as SSE event id) | `scan_id` → scans (cascade), unique (`scan_id`, `domain`), same check columns as `domain_checks`, stored as a snapshot |
 
-### 7.2 Database Configuration
-
-**H2 Connection URL:**
-```
-jdbc:h2:~/jtyposquatting/db;AUTO_SERVER=TRUE
-```
-
-**Settings:**
-- Auto-commit: enabled
-- Transaction isolation: READ_COMMITTED
-- Max connections: 16
+On MySQL, domain columns use `CHARACTER SET ascii COLLATE ascii_bin`. The default `utf8mb4_0900_ai_ci`
+collation ignores accents, so `exämple.com` would equal `example.com`. Text columns use
+`utf8mb4_0900_bin`. Screenshots are never stored in the database, only their key.
 
 ---
 
-## 8. Configuration Reference
+## 6. Configuration Reference
 
-### 8.1 All Configuration Properties
+Values below are the defaults of `application.properties` and of the `@Value` annotations. Environment
+variables in parentheses override them.
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `api.default.url` | `http://localhost:8080` | Backend API URL |
-| `api.timeout.ms` | `10000` | API connection timeout |
-| `domain.testing.timeout.ms` | `5000` | Domain check timeout |
-| `domain.batch.size` | `50` | Domains per batch |
-| `domain.batch.delay.ms` | `200` | Delay between batches |
-| `domain.max.parallel.checks` | `10` | Max concurrent checks |
-| `ui.window.width` | `1200` | Window width (pixels) |
-| `ui.window.height` | `800` | Window height (pixels) |
-| `ui.table.row.height` | `24` | Table row height |
-| `ui.preview.width` | `320` | Screenshot width |
-| `ui.preview.height` | `240` | Screenshot height |
-| `ui.max.open.dialogs` | `5` | Max detail dialogs |
-| `log.backend.path` | `/tmp/jtypo-backend.log` | Backend log path |
-| `log.frontend.path` | `/tmp/jtypo-frontend.log` | Frontend log path |
+| `jtypo.security.mode` | `oidc` | `oidc` (web service) or `local` (desktop application, set by `CombinedLauncher`) |
+| `jtypo.oidc.issuer-uri` (`OIDC_ISSUER_URI`) | `http://localhost:8180/realms/jtypo` | Issuer, discovered at the first login |
+| `jtypo.oidc.client-id` / `client-secret` (`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`) | `jtypo-web` / `dev-secret-change-me` | Confidential client |
+| `jtypo.security.post-login-url` | `/app` | Page after login |
+| `jtypo.security.post-logout-url` | `{baseUrl}/` | Page after logout at the identity provider |
+| `jtypo.security.login-failure-url` | `/app?loginError=1` | Page after a failed login |
+| `jtypo.api.enabled` | `true` | `false` on workers: API controllers disabled |
+| `jtypo.worker.enabled` | `true` | `false` on API instances: no scan processing, no purge |
+| `jtypo.worker.max-concurrent-scans` | `4` | Scans processed at the same time by a worker |
+| `jtypo.worker.poll-interval-ms` | `1000` | Polling of the queue |
+| `jtypo.worker.heartbeat-interval-ms` | `5000` | Heartbeat of a running scan |
+| `jtypo.worker.stale-after-ms` | `120000` | A running scan without heartbeat is taken over |
+| `jtypo.quota.max-concurrent-scans` | `2` | Active scans per user |
+| `jtypo.quota.scans-per-day` | `50` | Scans per user over 24 sliding hours |
+| `jtypo.quota.max-domains-per-scan` | `50000` | Generated domains checked per scan |
+| `jtypo.rate-limit.requests-per-minute` | `120` | API requests per user (per IP when anonymous) |
+| `jtypo.analysis.max-concurrent-checks` | `64` | Outbound checks at the same time on an instance |
+| `jtypo.cache.ttl-hours` | `24` | Validity of a cached check |
+| `jtypo.outbound.allow-private-addresses` | `false` | Never `true` in production (tests only) |
+| `jtypo.outbound.allowed-ports` | `80,443` | Ports of outbound connections |
+| `jtypo.outbound.user-agent` | `Mozilla/5.0 (compatible; JTypoSquatting/2.0)` | User-Agent of the HTTP client and the browser |
+| `jtypo.screenshot.enabled` | `true` | Screenshots |
+| `jtypo.screenshot.chromium-sandbox` | `true` | Disable only inside an isolated container |
+| `jtypo.screenshot.timeout-ms` | `15000` | Navigation timeout |
+| `jtypo.screenshot.max-concurrent` | `2` | Chromium instances per process |
+| `jtypo.sse.poll-interval-ms` | `500` | Database polling of a live stream |
+| `jtypo.sse.keep-alive-ms` | `15000` | Keep-alive comment without activity |
+| `jtypo.sse.max-duration-ms` | `1800000` | Duration of a stream before the browser reconnects |
+| `jtypo.storage.type` (`STORAGE_TYPE`) | `filesystem` | `filesystem` or `s3` |
+| `jtypo.storage.directory` (`STORAGE_DIRECTORY`) | `${java.io.tmpdir}/jtyposquatting` | Directory of the `filesystem` store |
+| `jtypo.storage.s3.endpoint` / `region` / `bucket` (`S3_ENDPOINT` / `S3_REGION` / `S3_BUCKET`) | — / `us-east-1` / `jtypo-screenshots` | S3-compatible storage |
+| `jtypo.storage.s3.access-key` / `secret-key` / `path-style` (`S3_ACCESS_KEY` / `S3_SECRET_KEY` / `S3_PATH_STYLE`) | — / — / `true` | Credentials and URL style |
+| `jtypo.retention.scan-days` | `90` | Finished scans are purged after this many days |
+| `jtypo.retention.check-days` | `30` | Cached checks are purged after this many days |
+| `jtypo.retention.cron` | `0 30 3 * * *` | Purge schedule |
+| `jtypo.retention.max-scans-per-run` | `5000` | Scans deleted per purge run |
 
-### 8.2 Spring Boot Properties
+**Other settings:**
+- Database: `DB_URL` (default `jdbc:h2:mem:jtypo`), `DB_USER`, `DB_PASSWORD`, `DB_POOL_SIZE` (20).
+- Sessions: `spring.session.timeout=8h`; cookie `httpOnly`, `SameSite=Lax`, `Secure` with
+  `SESSION_COOKIE_SECURE`.
+- `FORWARD_HEADERS_STRATEGY`: `framework` behind the reverse proxy.
+- Management: endpoints `health`, `info` and `prometheus`, on port 8082 in the `api` and `worker`
+  profiles.
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `server.port` | `8080` | HTTP port |
-| `spring.threads.virtual.enabled` | `true` | Enable virtual threads |
-| `spring.task.execution.pool.core-size` | `16` | Core thread pool size |
-| `spring.task.execution.pool.max-size` | `128` | Max thread pool size |
-| `server.jetty.threads.max` | `200` | Max Jetty threads |
-| `spring.mvc.async.request-timeout` | `300000` | SSE timeout (5 min) |
+**Profiles:**
 
----
-
-## 9. Performance Tuning
-
-### 9.1 JVM Options
-
-```bash
-# Production settings
-java -Xms512M -Xmx2G \
-     -XX:+UseG1GC \
-     -XX:MaxGCPauseMillis=100 \
-     -Djava.awt.headless=false \
-     -jar JTypoSquatting.jar
-```
-
-### 9.2 Virtual Thread Tuning
-
-| Parameter | Default | Recommended |
-|-----------|---------|-------------|
-| Core pool size | 16 | CPU cores × 2 |
-| Max pool size | 128 | 256-512 for high concurrency |
-| Keep-alive | 60s | 30s |
-
-### 9.3 Memory Optimization
-
-**Screenshot Memory:**
-- Each screenshot: ~50-200 KB
-- For 1000 domains: ~50-200 MB
-- Recommendation: Limit concurrent screenshots
-
-**Database Memory:**
-- H2 cache: 16 MB default
-- For large datasets: Increase to 64 MB
-- Setting: `CACHE_SIZE=65536`
-
-### 9.4 Network Tuning
-
-```properties
-# Connection pooling
-http.connectTimeout=10000
-http.readTimeout=30000
-http.maxConnections=100
-
-# DNS caching
-networkaddress.cache.ttl=300
-networkaddress.cache.negative.ttl=60
-```
+| Profile | Settings |
+|---------|----------|
+| `api` | `jtypo.worker.enabled=false`, `management.server.port=8082` |
+| `worker` | `jtypo.worker.enabled=true`, `jtypo.api.enabled=false`, `server.port=8082` (monitoring only) |
 
 ---
 
-## 10. Development Guidelines
+## 7. Development Guidelines
 
-### 10.1 Code Style
-
-- **Java Version:** 21+
-- **Indentation:** 4 spaces
-- **Line Length:** 120 characters max
-- **Naming:** CamelCase for classes, PascalCase for methods
-
-### 10.2 Testing
-
-**Run Tests:**
-```bash
-./gradlew test
-```
-
-**Test Coverage:**
-```bash
-./gradlew jacocoTestReport
-```
-
-### 10.3 Building
-
-**Development Build:**
-```bash
-./gradlew clean build
-```
-
-**Production Build:**
-```bash
-./gradlew clean :frontend:fatJar
-```
-
-### 10.4 Debugging
-
-**Remote Debug (Backend):**
-```bash
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 \
-     -jar backend.jar
-```
-
-**Remote Debug (Frontend):**
-```bash
-java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5006 \
-     -jar JTypoSquatting.jar
-```
-
-### 10.5 Logging
-
-**Log Levels:**
-- ERROR: Critical failures
-- WARN: Recoverable issues
-- INFO: Normal operation
-- DEBUG: Detailed diagnostics
-- TRACE: Full trace
-
-**Enable Debug Logging:**
-```properties
-logging.level.com.aleph.graymatter=DEBUG
-```
-
----
-
-## Appendix A: HTTP Status Code Reference
-
-| Code | Meaning | JTypoSquatting Status |
-|------|---------|----------------------|
-| 200 | OK | Suspicious |
-| 301 | Moved Permanently | Safe |
-| 302 | Found | Safe |
-| 304 | Not Modified | Safe |
-| 400 | Bad Request | Safe |
-| 403 | Forbidden | Safe |
-| 404 | Not Found | Safe |
-| 500 | Internal Server Error | Safe |
-| 0 | Connection Failed | Dead |
-| -1 | In Progress | Testing... |
-
----
-
-## Appendix B: Language Codes
-
-| Code | Language | Code | Language |
-|------|----------|------|----------|
-| EN | English | DE | German |
-| FR | French | ES | Spanish |
-| IT | Italian | PT | Portuguese |
-| NL | Dutch | RU | Russian |
-| PL | Polish | TR | Turkish |
-| ZH | Chinese | JA | Japanese |
-| KO | Korean | AR | Arabic |
-| HI | Hindi | TH | Thai |
-
----
-
-## Appendix C: Related Documentation
-
-- [Software Architecture](ARCHITECTURE.md)
-- [Functional Architecture](FUNCTIONAL_ARCHITECTURE.md)
-- [API Documentation](API.md)
-- [Deployment Guide](DEPLOYMENT.md)
-
----
-
-*End of Document*
+- **Run the tests:**
+  - Unit, Spring and Testcontainers tests: `./gradlew test`. MySQL and S3Mock run when a container
+    engine is available.
+  - Tests that contact real websites: `-Dinclude.network=true`.
+- **New algorithm:** see § 2.3.
+- **Schema change:** add a migration to **both** `db/migration/mysql` and `db/migration/h2`, with the same
+  version number. Store domains with `DomainKeys.toKey`.
+- **New outbound connection:** it must go through `OutboundPolicy` (resolution and URL check). Never
+  connect to a user-controlled host directly.
+- **Beans with two constructors** (one for Spring, one for tests): annotate the Spring one with
+  `@Autowired`.

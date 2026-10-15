@@ -66,7 +66,7 @@ public class TLD {
         }
     }
 
-    public static void AddAndReplaceAllTLD(DomainName domainName, ArrayList<DomainName> resultList) {
+    public static void AddAndReplaceAllTLD(DomainName domainName, List<DomainName> resultList) {
         String domainWithoutTLD = DomainName.getDomainWithoutTLD(domainName.toString());
         String originalTLD = domainName.getTLD().toLowerCase();
         Set<String> uniqueDomains = new HashSet<>();
@@ -87,6 +87,12 @@ public class TLD {
                     }
                 }
             }
+        }
+    }
+
+    static List<String> getTLDList() {
+        synchronized (TLD_LIST) {
+            return new ArrayList<>(TLD_LIST);
         }
     }
 

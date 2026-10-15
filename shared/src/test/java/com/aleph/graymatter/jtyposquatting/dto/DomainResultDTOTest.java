@@ -9,7 +9,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour DomainResultDTO — getters, Base64, sérialisation cohérente.
+ * Unit tests of DomainResultDTO: getters, Base64, consistent serialization.
  */
 class DomainResultDTOTest {
 
@@ -18,7 +18,7 @@ class DomainResultDTOTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("Constructeur complet initialise tous les champs correctement")
+    @DisplayName("The full constructor initialises every field")
     void testFullConstructor() {
         byte[] screenshot = {1, 2, 3};
         DomainResultDTO dto = new DomainResultDTO(
@@ -44,7 +44,7 @@ class DomainResultDTOTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("Screenshot bytes → Base64 lors de la construction")
+    @DisplayName("Screenshot bytes → Base64 at construction")
     void testScreenshotBase64EncodedAtConstruction() {
         byte[] screenshot = "test-png-data".getBytes();
         DomainResultDTO dto = new DomainResultDTO(
@@ -58,7 +58,7 @@ class DomainResultDTOTest {
     }
 
     @Test
-    @DisplayName("setScreenshot() met à jour le Base64 en conséquence")
+    @DisplayName("setScreenshot() updates the Base64 value")
     void testSetScreenshotUpdatesBase64() {
         DomainResultDTO dto = new DomainResultDTO();
         byte[] data = {10, 20, 30, 40};
@@ -69,7 +69,7 @@ class DomainResultDTOTest {
     }
 
     @Test
-    @DisplayName("setScreenshotBase64() décode les bytes correctement")
+    @DisplayName("setScreenshotBase64() decodes the bytes")
     void testSetScreenshotBase64DecodeBytes() {
         byte[] original = {5, 10, 15};
         String b64 = Base64.getEncoder().encodeToString(original);
@@ -82,7 +82,7 @@ class DomainResultDTOTest {
     }
 
     @Test
-    @DisplayName("Screenshot null — pas d'exception, Base64 null")
+    @DisplayName("Null screenshot: no exception, null Base64")
     void testNullScreenshotNoException() {
         DomainResultDTO dto = new DomainResultDTO(
                 "safe.com", DomainStatus.SAFE, null, null, null,
@@ -94,7 +94,7 @@ class DomainResultDTOTest {
     }
 
     @Test
-    @DisplayName("getScreenshot() décode depuis Base64 si screenshot est null mais Base64 présent")
+    @DisplayName("getScreenshot() decodes from Base64 when the bytes are null but Base64 is set")
     void testGetScreenshotDecodesFromBase64WhenBytesAreNull() {
         byte[] data = {7, 8, 9};
         String b64 = Base64.getEncoder().encodeToString(data);
@@ -129,7 +129,7 @@ class DomainResultDTOTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("toString() contient le domaine et le statut")
+    @DisplayName("toString() contains the domain and the status")
     void testToStringContainsDomainAndStatus() {
         DomainResultDTO dto = new DomainResultDTO();
         dto.setDomain("phishing.com");

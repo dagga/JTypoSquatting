@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour DomainName — parsing subdomain / SLD / TLD.
+ * Unit tests of DomainName: parsing of subdomain / SLD / TLD.
  */
 class DomainNameTest {
 
@@ -16,7 +16,7 @@ class DomainNameTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("Domaine simple (sans sous-domaine) : google.com")
+    @DisplayName("Simple domain (no subdomain): google.com")
     void testSimpleDomain() throws InvalidDomainException {
         DomainName dn = new DomainName("google.com");
         assertEquals("google", dn.getDomain());
@@ -27,23 +27,23 @@ class DomainNameTest {
     }
 
     @Test
-    @DisplayName("Domaine avec sous-domaine : www.google.com — comportement du parseur")
+    @DisplayName("Domain with a subdomain: www.google.com, parser behaviour")
     void testDomainWithSubdomain() throws InvalidDomainException {
         DomainName dn = new DomainName("www.google.com");
-        // Le parseur retire le TLD ("com") → "www.google"
-        // haveSubDomain("www.google") est false (un seul '.') → domain = "www.google", subDomain = ""
-        // Ce comportement est documenté ici comme référence.
+        // The parser removes the TLD ("com") → "www.google"
+        // haveSubDomain("www.google") is false (a single '.') → domain = "www.google", subDomain = ""
+        // This behaviour is documented here as a reference.
         assertEquals("com", dn.getTLD());
         assertEquals("www.google.com", dn.toString());
-        // La détection de sous-domaine nécessite 2+ points avant le TLD
-        // Pour le parseur actuel, "www.google.com" est vu comme SLD="www.google", TLD="com"
+        // Subdomain detection needs 2+ dots before the TLD
+        // For the current parser, "www.google.com" is SLD="www.google", TLD="com"
         assertNotNull(dn.getDomain());
     }
 
     @Test
-    @DisplayName("TLD en deux parties — domaine sans sous-domaine")
+    @DisplayName("Two-part TLD: domain without a subdomain")
     void testTwoPartTLD() throws InvalidDomainException {
-        // getSuffix prend seulement la partie après le dernier '.'
+        // getSuffix only takes the part after the last '.'
         DomainName dn = new DomainName("example.co");
         assertEquals("example", dn.getDomain());
         assertEquals("co", dn.getTLD());
@@ -51,7 +51,7 @@ class DomainNameTest {
     }
 
     @Test
-    @DisplayName("Domaine avec tiret : ex-ample.com")
+    @DisplayName("Domain with a dash: ex-ample.com")
     void testDomainWithHyphen() throws InvalidDomainException {
         DomainName dn = new DomainName("ex-ample.com");
         assertEquals("ex-ample", dn.getDomain());
@@ -60,11 +60,11 @@ class DomainNameTest {
     }
 
     // ---------------------------------------------------------------
-    // Méthodes statiques utilitaires
+    // Static helper methods
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("haveSubDomain() static — détecte correctement")
+    @DisplayName("Static haveSubDomain() detects subdomains")
     void testStaticHaveSubDomain() {
         assertTrue(DomainName.haveSubDomain("www.example.com"));
         assertFalse(DomainName.haveSubDomain("example.com"));
@@ -93,15 +93,15 @@ class DomainNameTest {
     }
 
     @Test
-    @DisplayName("getDomainWithoutSubDomainMinusTLD() — domaine sans sous-domaine")
+    @DisplayName("getDomainWithoutSubDomainMinusTLD(): domain without a subdomain")
     void testGetDomainWithoutSubDomainMinusTLD() {
-        // Sans sous-domaine : retourne le domaine sans le TLD
+        // Without a subdomain: returns the domain without the TLD
         assertEquals("example", DomainName.getDomainWithoutSubDomainMinusTLD("example.com"));
-        // Avec sous-domaine : retourne la partie SLD (sans le sous-domaine ni le TLD)
+        // With a subdomain: returns the SLD part (without the subdomain nor the TLD)
         // "www.example.com" → domainWithoutTLD = "www.example" → getDomainWithoutSubDomain("www.example")
         // haveSubDomain("www.example") = true → retourne "example"
-        // Mais NOTE : getDomainWithoutSubDomainMinusTLD() appelle haveSubDomain sur le domaine COMPLET
-        // avec le TLD encore présent, donc il voit "www.example.com" avec 2 dots → sous-domaine = "www"
+        // NOTE: getDomainWithoutSubDomainMinusTLD() calls haveSubDomain on the FULL domain, TLD included,
+        // so it sees "www.example.com" with 2 dots → subdomain = "www"
         assertEquals("example", DomainName.getDomainWithoutSubDomainMinusTLD("www.example.com"));
     }
 
@@ -110,43 +110,43 @@ class DomainNameTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("Domaine sans point → InvalidDomainException")
+    @DisplayName("Domain without a dot → InvalidDomainException")
     void testInvalidDomainNoDot() {
         assertThrows(InvalidDomainException.class, () -> new DomainName("nodot"));
     }
 
     @Test
-    @DisplayName("Domaine se terminant par un point → InvalidDomainException")
+    @DisplayName("Domain ending with a dot → InvalidDomainException")
     void testInvalidDomainTrailingDot() {
         assertThrows(InvalidDomainException.class, () -> new DomainName("trailing."));
     }
 
     @Test
-    @DisplayName("Domaine commençant par un point → InvalidDomainException (Guava)")
+    @DisplayName("Domain starting with a dot → InvalidDomainException (Guava)")
     void testInvalidDomainLeadingDot() {
         assertThrows(InvalidDomainException.class, () -> new DomainName(".example.com"));
     }
 
     @Test
-    @DisplayName("Double point dans le domaine → InvalidDomainException (Guava)")
+    @DisplayName("Double dot in the domain → InvalidDomainException (Guava)")
     void testInvalidDomainDoubleDot() {
         assertThrows(InvalidDomainException.class, () -> new DomainName("example..com"));
     }
 
     @Test
-    @DisplayName("Tiret initial dans le label → InvalidDomainException (Guava)")
+    @DisplayName("Leading dash in a label → InvalidDomainException (Guava)")
     void testInvalidDomainLeadingHyphen() {
         assertThrows(InvalidDomainException.class, () -> new DomainName("-abc.com"));
     }
 
     @Test
-    @DisplayName("URL avec protocole → InvalidDomainException (Guava)")
+    @DisplayName("URL with a protocol → InvalidDomainException (Guava)")
     void testInvalidDomainWithScheme() {
         assertThrows(InvalidDomainException.class, () -> new DomainName("http://a.b"));
     }
 
     @Test
-    @DisplayName("Espaces dans le domaine → InvalidDomainException (Guava)")
+    @DisplayName("Spaces in the domain → InvalidDomainException (Guava)")
     void testInvalidDomainWithSpaces() {
         assertThrows(InvalidDomainException.class, () -> new DomainName(" . "));
     }
@@ -156,7 +156,7 @@ class DomainNameTest {
     // ---------------------------------------------------------------
 
     @Test
-    @DisplayName("getAsHttpsUrl() produit une URI correcte")
+    @DisplayName("getAsHttpsUrl() produces a correct URI")
     void testGetAsHttpsUrl() throws Exception {
         DomainName dn = new DomainName("www.example.com");
         assertEquals("https://www.example.com", dn.getAsHttpsUrl().toString());

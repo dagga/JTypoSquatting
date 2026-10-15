@@ -1,0 +1,112 @@
+# Production-like deployment (single host). Build and start from the project root:
+#   docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+# See deploy/.env.example for the required variables. The identity provider and the S3 storage are external.
+#
+# Networks:
+#   edge   : reverse proxy, frontend, API
+#   data   : internal only (no Internet) — API, workers, MySQL
+#   egress : Internet access for the workers only. Workers open hostile pages: they must not reach any
+#            internal service except MySQL and S3. Also block private ranges for this network on the host
+#            firewall (DOCKER-USER chain), in addition to the application-level anti-SSRF policy.
+
+name: jtyposquatting
+
+services:
+  proxy:
+    image: docker.io/library/nginx:1.29-alpine
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./nginx/jtyposquatting.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [web, api]
+    networks: [edge]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../web
+      args:
+        SITE_URL: ${SITE_URL}
+    networks: [edge]
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: api
+    environment: &backend-env
+      DB_URL: jdbc:mysql://mysql:3306/jtypo
+      DB_USER: jtypo
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      S3_ENDPOINT: ${S3_ENDPOINT}
+      S3_REGION: ${S3_REGION}
+      S3_BUCKET: ${S3_BUCKET}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+      S3_SECRET_KEY: ${S3_SECRET_KEY}
+      OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET}
+      JTYPO_OUTBOUND_USER_AGENT: ${USER_AGENT}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [edge, data]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+      target: worker
+    environment:
+      <<: *backend-env
+      # The Chromium sandbox needs user namespaces, not available here: the container is the sandbox
+      # (unprivileged user, no capabilities, read-only root, isolated networks)
+      JTYPO_SCREENSHOT_CHROMIUM_SANDBOX: "false"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [data, egress]
+    read_only: true
+    tmpfs: [/tmp, /home/pwuser]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    shm_size: 1gb
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3g
+    restart: unless-stopped
+
+  mysql:
+    image: docker.io/library/mysql:8.4
+    environment:
+      MYSQL_DATABASE: jtypo
+      MYSQL_USER: jtypo
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [data]
+    restart: unless-stopped
+
+networks:
+  edge: {}
+  data:
+    internal: true
+  egress: {}
+
+volumes:
+  mysql-data:

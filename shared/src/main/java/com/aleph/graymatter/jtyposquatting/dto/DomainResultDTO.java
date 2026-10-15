@@ -24,6 +24,7 @@ public class DomainResultDTO implements Serializable {
     
     private String homepageText;
     private Map<String, String> httpHeaders;
+    private TlsStatus tlsStatus = TlsStatus.NONE;
 
     public DomainResultDTO() {
     }
@@ -142,5 +143,13 @@ public class DomainResultDTO implements Serializable {
                 ", httpCode=" + httpCode +
                 ", screenshotSize=" + (getScreenshot() != null ? getScreenshot().length : 0) +
                 '}';
+    }
+
+    public TlsStatus getTlsStatus() {
+        return tlsStatus;
+    }
+
+    public void setTlsStatus(TlsStatus tlsStatus) {
+        this.tlsStatus = tlsStatus;
     }
 }

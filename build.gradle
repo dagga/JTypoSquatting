@@ -1,7 +1,6 @@
 // Root project configuration
 plugins {
     id 'org.springframework.boot' version '3.5.0' apply false
-    id 'org.openjfx.javafxplugin' version '0.0.14' apply false
 }
 
 // Load version from gradle.properties
@@ -37,15 +36,19 @@ subprojects {
     }
 
     test {
-        useJUnitPlatform()
-        // Propager le flag réseau/X11 aux tests :
-        // ./gradlew test -Dexclude.network=true  →  exclut @DisabledIfSystemProperty(named="exclude.network")
-        systemProperty 'exclude.network', System.getProperty('exclude.network', 'false')
+        // Tests that contact real Internet sites (@Tag("network")) are opt-in:
+        //   ./gradlew test -Dinclude.network=true
+        // Testcontainers tests (MySQL, S3) run when a container engine is available, and are skipped otherwise.
+        useJUnitPlatform {
+            if (System.getProperty('include.network') != 'true') {
+                excludeTags 'network'
+            }
+        }
         jvmArgs = []
     }
 }
 
-// Configuration pour le module shared
+// Configuration of the shared module
 project(':shared') {
     dependencies {
         implementation 'com.google.guava:guava:33.1.0-jre'
@@ -64,15 +67,9 @@ project(':shared') {
     }
 }
 
-// Configuration pour le module backend
+// Configuration of the backend module
 project(':backend') {
     apply plugin: 'org.springframework.boot'
-    apply plugin: 'org.openjfx.javafxplugin'
-
-    javafx {
-        version = "21"
-        modules = [ 'javafx.controls', 'javafx.swing', 'javafx.graphics', 'javafx.web' ]
-    }
 
     dependencies {
         implementation project(':shared')
@@ -81,9 +78,31 @@ project(':backend') {
         implementation 'org.springframework.boot:spring-boot-starter-web:3.5.0'
         implementation 'org.springframework.boot:spring-boot-starter-jetty:3.5.0'
 
-        // H2 embedded database (moved from shared)
-        implementation 'com.h2database:h2:2.2.224'
+        // Authentication: OpenID Connect login, session cookie (BFF pattern)
+        implementation 'org.springframework.boot:spring-boot-starter-security:3.5.0'
+        implementation 'org.springframework.boot:spring-boot-starter-oauth2-client:3.5.0'
+
+        // Screenshot storage on any S3-compatible service (Netty client excluded: the Apache client is used)
+        implementation('software.amazon.awssdk:s3:2.55.16') {
+            exclude group: 'software.amazon.awssdk', module: 'netty-nio-client'
+        }
+
+        // Monitoring: health, Prometheus metrics
+        implementation 'org.springframework.boot:spring-boot-starter-actuator:3.5.0'
+        runtimeOnly 'io.micrometer:micrometer-registry-prometheus:1.15.0'
+
+        // Rate limiting
+        implementation 'com.bucket4j:bucket4j_jdk17-core:8.21.0'
+
+        // Databases: MySQL in production, H2 for the desktop app and fast tests; schema managed by Flyway
         implementation 'org.springframework.boot:spring-boot-starter-jdbc:3.5.0'
+        implementation 'com.h2database:h2:2.2.224'
+        runtimeOnly 'com.mysql:mysql-connector-j:9.2.0'
+        implementation 'org.flywaydb:flyway-core:11.7.2'
+        runtimeOnly 'org.flywaydb:flyway-mysql:11.7.2'
+
+        // HTTP sessions stored in the database (several API instances)
+        implementation 'org.springframework.session:spring-session-jdbc:3.5.0'
 
         // Business logic dependencies
         implementation 'com.google.guava:guava:33.1.0-jre'
@@ -92,6 +111,12 @@ project(':backend') {
         // JSoup for HTML parsing
         implementation 'org.jsoup:jsoup:1.17.2'
 
+        // HTTP client with pluggable DNS resolver (anti-SSRF)
+        implementation 'org.apache.httpcomponents.client5:httpclient5:5.6.5'
+
+        // Headless Chromium for screenshots
+        implementation 'com.microsoft.playwright:playwright:1.63.0'
+
         // Language detection
         implementation 'com.github.pemistahl:lingua:1.2.1'
 
@@ -99,34 +124,33 @@ project(':backend') {
         testImplementation 'org.springframework.boot:spring-boot-starter-test:3.5.0'
         testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
         testImplementation 'org.wiremock:wiremock-standalone:3.9.1'
+        testImplementation 'org.springframework.security:spring-security-test:6.5.0'
+        testImplementation 'org.springframework.boot:spring-boot-testcontainers:3.5.0'
+        testImplementation 'org.testcontainers:junit-jupiter:1.21.4'
+        testImplementation 'org.testcontainers:mysql:1.21.4'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     }
 
     // Configure Spring Boot to find the main class
     tasks.withType(org.springframework.boot.gradle.tasks.bundling.BootJar) {
         mainClass = 'com.aleph.graymatter.jtyposquatting.JTypoSquattingApplication'
+        // Fixed name for the container images
+        archiveFileName = 'jtyposquatting-backend.jar'
     }
 
-    // Configure bootRun with JavaFX VM arguments
-    tasks.named('bootRun') {
-        jvmArgs = [
-            '--add-opens', 'java.desktop/java.awt=ALL-UNNAMED',
-            '--add-opens', 'java.desktop/sun.awt=ALL-UNNAMED',
-            '--add-opens', 'java.desktop/sun.awt.X11=ALL-UNNAMED',
-            '--add-opens', 'javafx.graphics/com.sun.javafx.application=ALL-UNNAMED',
-            '--add-opens', 'javafx.graphics/com.sun.glass.ui=ALL-UNNAMED',
-            '-Djava.awt.headless=false',
-            '-Dglass.platform=gtk',
-            // Force software rendering for JavaFX (required for headless/Xvfb)
-            '-Dprism.order=sw',
-            '-Dprism.vsync=false',
-            '-Dprism.forceGPU=false'
-        ]
+    // Installs the Chromium build used by Playwright for screenshots.
+    // Use -PwithDeps to also install system libraries (CI, requires sudo).
+    tasks.register('installPlaywrightBrowsers', JavaExec) {
+        description = 'Installs the headless Chromium used for screenshots'
+        group = 'application'
+        classpath = sourceSets.main.runtimeClasspath
+        mainClass = 'com.microsoft.playwright.CLI'
+        args = ['install'] + (project.hasProperty('withDeps') ? ['--with-deps'] : []) + ['chromium']
     }
 
 }
 
-// Configuration pour le module frontend
+// Configuration of the frontend module
 project(':frontend') {
     apply plugin: 'java'
 

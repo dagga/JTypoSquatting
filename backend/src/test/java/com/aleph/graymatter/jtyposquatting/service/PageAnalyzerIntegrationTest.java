@@ -7,7 +7,6 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -21,15 +20,11 @@ import static org.mockito.Mockito.when;
  * Integration tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
  *
- * <p>Ces tests requièrent un display X11 (JavaFX) et un accès réseau.
- * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
- * {@code ./gradlew test -Dexclude.network=true}
- *
- * Note: These tests require a display for JavaFX screenshot capture.
- * In headless CI environments, use Xvfb or set DISPLAY environment variable.
+ * <p>These tests need network access (the screenshot is simulated). They are tagged
+ * {@code @Tag("network")} and only run on demand:
+ * {@code ./gradlew test -Dinclude.network=true}
  */
 @Tag("network")
-@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
 @SpringBootTest
 @ActiveProfiles("test")
 class PageAnalyzerIntegrationTest {

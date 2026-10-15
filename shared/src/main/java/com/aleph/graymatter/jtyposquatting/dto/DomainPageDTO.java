@@ -20,6 +20,7 @@ public class DomainPageDTO implements Serializable {
     private int httpCode;
     private Map<String, String> httpHeaders;
     private byte[] screenshot;
+    private TlsStatus tlsStatus = TlsStatus.NONE;
 
     public DomainPageDTO() {
     }
@@ -157,5 +158,13 @@ public class DomainPageDTO implements Serializable {
 
     public void setScreenshot(byte[] screenshot) {
         this.screenshot = screenshot;
+    }
+
+    public TlsStatus getTlsStatus() {
+        return tlsStatus;
+    }
+
+    public void setTlsStatus(TlsStatus tlsStatus) {
+        this.tlsStatus = tlsStatus;
     }
 }

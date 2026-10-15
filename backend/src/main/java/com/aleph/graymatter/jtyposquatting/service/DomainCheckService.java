@@ -4,30 +4,63 @@ import com.aleph.graymatter.jtyposquatting.db.DatabaseService;
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainResultDTO;
 import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Semaphore;
 
 @Service
 public class DomainCheckService {
 
+    private static final Logger logger = LoggerFactory.getLogger(DomainCheckService.class);
+
     private final DatabaseService databaseService;
     private final PageAnalyzer pageAnalyzer;
 
-    public DomainCheckService(DatabaseService databaseService, PageAnalyzer pageAnalyzer) {
+    // Caps outbound checks for the whole instance: a scan submits thousands of domains at once
+    private final Semaphore outboundChecks;
+
+    public DomainCheckService(DatabaseService databaseService, PageAnalyzer pageAnalyzer,
+                              @Value("${jtypo.analysis.max-concurrent-checks:64}") int maxConcurrentChecks) {
         this.databaseService = databaseService;
         this.pageAnalyzer = pageAnalyzer;
+        this.outboundChecks = new Semaphore(maxConcurrentChecks, true);
     }
 
+    /**
+     * Checks a domain and stores the page in the legacy table of the desktop application.
+     */
     public DomainResultDTO checkDomain(String domain) {
+        return check(domain, true);
+    }
+
+    /**
+     * Checks a domain without storing anything (web scans persist their own results).
+     */
+    public DomainResultDTO analyze(String domain) {
+        return check(domain, false);
+    }
+
+    private DomainResultDTO check(String domain, boolean saveLegacy) {
+        try {
+            outboundChecks.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new DomainResultDTO(domain, DomainStatus.UNREACHABLE, "", "", "Cancelled", 0, null, "", null);
+        }
         try {
             DomainPageDTO pageData = pageAnalyzer.analyzePage(domain);
 
             // If we got an HTTP code > 0, the domain is "Alive"
             if (pageData != null && pageData.getHttpCode() > 0) {
-                // Save to database
-                try {
-                    databaseService.save(pageData);
-                } catch (Exception e) {
-                    System.err.println("[DomainCheck] Failed to save " + domain + ": " + e.getMessage());
+                if (saveLegacy) {
+                    try {
+                        databaseService.save(pageData);
+                    } catch (Exception e) {
+                        logger.warn("Failed to save {}: {}", domain, e.getMessage());
+                    }
                 }
 
                 // Truncate long fields for DTO
@@ -46,9 +79,9 @@ public class DomainCheckService {
                 DomainStatus domainStatus = (pageData.getHttpCode() == 200) ? DomainStatus.SUSPICIOUS : DomainStatus.SAFE;
 
                 byte[] screenshot = pageData.getScreenshot();
-                System.out.println("[DomainCheck] Sending result for " + domain + " with screenshot: " + (screenshot != null ? screenshot.length : 0) + " bytes");
+                logger.debug("Sending result for {} with screenshot: {} bytes", domain, screenshot != null ? screenshot.length : 0);
 
-                return new DomainResultDTO(
+                DomainResultDTO result = new DomainResultDTO(
                         domain,
                         domainStatus,
                         title,
@@ -59,6 +92,8 @@ public class DomainCheckService {
                         pageData.getHomepageText(),
                         pageData.getHttpHeaders()
                 );
+                result.setTlsStatus(pageData.getTlsStatus());
+                return result;
             } else {
                 // No HTTP code (timeout, unknown host, etc.) -> Unreachable (should be removed from list)
                 return new DomainResultDTO(
@@ -74,7 +109,7 @@ public class DomainCheckService {
                 );
             }
         } catch (Exception e) {
-            System.err.println("[DomainCheck] Error analyzing " + domain + ": " + e.getMessage());
+            logger.warn("Error analyzing {}: {}", domain, e.getMessage());
             // Treat exceptions as "Unreachable"
             return new DomainResultDTO(
                     domain,
@@ -87,6 +122,8 @@ public class DomainCheckService {
                     "",
                     null
             );
+        } finally {
+            outboundChecks.release();
         }
     }
 }

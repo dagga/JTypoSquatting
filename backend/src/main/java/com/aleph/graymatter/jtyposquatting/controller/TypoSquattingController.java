@@ -8,6 +8,8 @@ import com.aleph.graymatter.jtyposquatting.dto.DomainStatus;
 import com.aleph.graymatter.jtyposquatting.service.DomainCheckService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,8 +17,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -28,8 +30,12 @@ import static java.lang.Thread.sleep;
 /**
  * REST controller for typo squatting domain generation and checking.
  * Uses Virtual Threads (Java 21+) for efficient parallel domain checking.
+ * <p>
+ * Legacy API of the desktop application: only loaded in local mode, because cancellation and
+ * clearing act on every session. The web service uses {@code /api/scans}.
  */
 @RestController
+@ConditionalOnProperty(name = "jtypo.security.mode", havingValue = "local")
 @RequestMapping("/api")
 public class TypoSquattingController {
 
@@ -39,13 +45,17 @@ public class TypoSquattingController {
     private final DatabaseService databaseService;
     private final ConcurrentHashMap<String, ExecutorService> activeSessions = new ConcurrentHashMap<>();
 
-    public TypoSquattingController(DomainCheckService domainCheckService, DatabaseService databaseService) {
+    private final int maxDomainsPerScan;
+
+    public TypoSquattingController(DomainCheckService domainCheckService, DatabaseService databaseService,
+                                   @Value("${jtypo.quota.max-domains-per-scan:50000}") int maxDomainsPerScan) {
         this.domainCheckService = domainCheckService;
         this.databaseService = databaseService;
+        this.maxDomainsPerScan = maxDomainsPerScan;
     }
 
     @GetMapping(value = "/generate-and-check", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter generateAndCheckDomains(@RequestParam String domain) {
+    public ResponseEntity<SseEmitter> generateAndCheckDomains(@RequestParam String domain) {
         SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
 
         ExecutorService sessionExecutor = Executors.newVirtualThreadPerTaskExecutor();
@@ -69,7 +79,11 @@ public class TypoSquattingController {
             try {
                 // 1. Generate domains
                 JTypoSquatting jTypoSquatting = new JTypoSquatting(domain);
-                ArrayList<String> generatedDomains = jTypoSquatting.getListOfDomains();
+                List<String> generatedDomains = jTypoSquatting.getListOfDomains();
+                if (generatedDomains.size() > maxDomainsPerScan) {
+                    logger.info("Scan of {} limited to {} of {} generated domains", domain, maxDomainsPerScan, generatedDomains.size());
+                    generatedDomains = generatedDomains.subList(0, maxDomainsPerScan);
+                }
 
                 // 2. Stream generated domains with "Testing..." status first
                 for (String generatedDomain : generatedDomains) {
@@ -127,7 +141,7 @@ public class TypoSquattingController {
             }
         });
 
-        return emitter;
+        return ResponseEntity.ok(emitter);
     }
 
     @GetMapping("/cancel")

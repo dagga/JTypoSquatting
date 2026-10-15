@@ -1,11 +1,12 @@
 package com.aleph.graymatter.jtyposquatting.service;
 
 import com.aleph.graymatter.jtyposquatting.dto.DomainPageDTO;
+import com.aleph.graymatter.jtyposquatting.security.OutboundPolicy;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfSystemProperty;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,9 +14,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * Functional tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
  *
- * <p>Ces tests effectuent de vraies connexions réseau et/ou requièrent un display X11.
- * Ils sont marqués {@code @Tag("network")} et peuvent être exclus :
- * {@code ./gradlew test -Dexclude.network=true}
+ * <p>These tests open real network connections. They are tagged {@code @Tag("network")} and only
+ * run on demand:
+ * {@code ./gradlew test -Dinclude.network=true}
  *
  * These tests verify:
  * 1. Data collection from real domains
@@ -23,20 +24,23 @@ import static org.junit.jupiter.api.Assertions.*;
  * 3. Backend data persistence
  */
 @Tag("network")
-@DisabledIfSystemProperty(named = "exclude.network", matches = "true")
 class PageAnalyzerFunctionalTest {
 
     private PageAnalyzer pageAnalyzer;
 
+    private PlaywrightScreenshotService screenshotService;
+
     @BeforeEach
     void setUp() {
-        boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-        if (isCI) {
-            // In CI, return dummy screenshot data
-            pageAnalyzer = new PageAnalyzer(url -> new byte[1024]);
-        } else {
-            pageAnalyzer = new PageAnalyzer(new JavaFXScreenshotService());
-        }
+        OutboundPolicy policy = new OutboundPolicy(false, java.util.Set.of(80, 443));
+        // Real headless Chromium; the screenshot is mandatory in CI and optional locally (browser may be missing)
+        screenshotService = new PlaywrightScreenshotService(policy, true, false, 15000, 1);
+        pageAnalyzer = new PageAnalyzer(screenshotService, policy);
+    }
+
+    @AfterEach
+    void tearDown() {
+        screenshotService.shutdown();
     }
 
     @Test
@@ -91,7 +95,7 @@ class PageAnalyzerFunctionalTest {
                 assertTrue(result.getScreenshot().length > 0, "Screenshot should have data");
                 System.out.println("Local Mode: Screenshot captured: " + result.getScreenshot().length + " bytes");
             } else {
-                System.out.println("Local Mode: Screenshot skipped (no display - install Xvfb to test screenshots)");
+                System.out.println("Local Mode: Screenshot skipped (run ./gradlew :backend:installPlaywrightBrowsers to test screenshots)");
             }
         }
     }

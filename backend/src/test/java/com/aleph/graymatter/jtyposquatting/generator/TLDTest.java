@@ -11,23 +11,23 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour TLD — génération de variantes de TLD, thread-safety, TLD_LIST chargée.
+ * Unit tests of TLD: TLD variants, thread safety, loading of TLD_LIST.
  */
 class TLDTest {
 
     @Test
-    @DisplayName("La liste TLD est chargée et non vide (classpath ou filesystem)")
+    @DisplayName("The TLD list is loaded and not empty (classpath or file system)")
     void testTLDListLoadedAndNonEmpty() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
         TLD.AddAndReplaceAllTLD(dn, result);
 
-        // Si la liste TLD est chargée, on doit avoir des variantes
-        assertFalse(result.isEmpty(), "Aucun TLD alternatif généré — TLD_LIST est peut-être vide");
+        // When the TLD list is loaded, there must be variants
+        assertFalse(result.isEmpty(), "No alternative TLD generated: TLD_LIST may be empty");
     }
 
     @Test
-    @DisplayName("Le TLD original 'com' n'est pas dans les variantes générées")
+    @DisplayName("The original TLD 'com' is not among the generated variants")
     void testOriginalTLDExcluded() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -35,12 +35,12 @@ class TLDTest {
 
         for (DomainName variant : result) {
             assertNotEquals("com", variant.getTLD(),
-                    "Le TLD original 'com' ne doit pas être dans les variantes : " + variant);
+                    "The original TLD 'com' must not be among the variants: " + variant);
         }
     }
 
     @Test
-    @DisplayName("Aucune variante n'est dupliquée")
+    @DisplayName("No variant is duplicated")
     void testNoDuplicates() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -51,11 +51,11 @@ class TLDTest {
                 .collect(Collectors.toSet());
 
         assertEquals(result.size(), unique.size(),
-                "Des domaines dupliqués ont été générés");
+                "Duplicate domains were generated");
     }
 
     @Test
-    @DisplayName("La partie SLD ('example') est préservée dans toutes les variantes")
+    @DisplayName("The SLD part ('example') is kept in every variant")
     void testSLDPreserved() throws Exception {
         DomainName dn = new DomainName("example.com");
         ArrayList<DomainName> result = new ArrayList<>();
@@ -63,21 +63,21 @@ class TLDTest {
 
         for (DomainName variant : result) {
             assertEquals("example", variant.getDomain(),
-                    "Le SLD a été modifié dans : " + variant);
+                    "The SLD was changed in: " + variant);
         }
     }
 
     @Test
-    @DisplayName("Les variantes sont des DomainName valides (pas d'exception à la construction)")
+    @DisplayName("Variants are valid DomainName objects (no exception at construction)")
     void testAllVariantsAreValidDomainNames() throws Exception {
         DomainName dn = new DomainName("test.fr");
         ArrayList<DomainName> result = new ArrayList<>();
-        // Si une variante invalide est construite, une RuntimeException est levée
+        // Building an invalid variant would throw a RuntimeException
         assertDoesNotThrow(() -> TLD.AddAndReplaceAllTLD(dn, result));
     }
 
     @Test
-    @DisplayName("Thread-safety : appels concurrents ne produisent pas d'exception")
+    @DisplayName("Thread safety: concurrent calls throw no exception")
     void testConcurrentCalls() throws Exception {
         DomainName dn = new DomainName("concurrent.com");
 
@@ -103,7 +103,7 @@ class TLDTest {
 
         for (int i = 0; i < threadCount; i++) {
             assertNull(errors[i],
-                    "Erreur dans le thread " + i + " : " + errors[i]);
+                    "Error in thread " + i + ": " + errors[i]);
         }
     }
 }

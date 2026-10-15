@@ -1,9 +1,6 @@
-# JTypoSquatting - Deployment Guide
+# JTypoSquatting — Deployment Guide
 
-**Version:** 2.0-alpha1  
-**Last Updated:** March 2025
-
----
+**Version:** 2.0-alpha1
 
 ## Table of Contents
 
@@ -12,677 +9,424 @@
 3. [Building from Source](#3-building-from-source)
 4. [Running the Application](#4-running-the-application)
 5. [Configuration](#5-configuration)
-6. [Native Installers](#6-native-installers)
+5bis. [Web Service Deployment (API and workers)](#5bis-web-service-deployment-api-and-workers)
+6. [Native Installers (desktop)](#6-native-installers-desktop)
 7. [CI/CD with GitHub Actions](#7-cicd-with-github-actions)
 8. [Troubleshooting](#8-troubleshooting)
 9. [Uninstallation](#9-uninstallation)
+- [Appendix A: File Locations](#appendix-a-file-locations)
+- [Appendix B: Port Usage](#appendix-b-port-usage)
+- [Appendix C: Quick Reference](#appendix-c-quick-reference)
 
 ---
 
 ## 1. System Requirements
 
-### 1.1 Minimum Requirements
+| Use | Requirements |
+|-----|--------------|
+| Desktop application | JDK or JRE 21+, a display, Internet access. Headless Chromium for screenshots, installed once. |
+| Development (web service) | JDK 21–24 (Gradle 9.0 does not run on Java 25), Node.js 22, Docker or Podman |
+| Production (web service) | Docker Engine with Compose (or equivalent orchestrator); an OpenID Connect provider; an S3-compatible storage; a DNS name with TLS |
 
-| Component | Requirement |
-|-----------|-------------|
-| **Operating System** | Windows 10, macOS 10.14+, Linux (Ubuntu 20.04+) |
-| **Java Version** | JDK 21 or higher |
-| **RAM** | 2 GB |
-| **Disk Space** | 500 MB |
-| **Display** | 1280x720 resolution |
-| **Network** | Internet access for domain checking |
+Sizing guidelines for production:
 
-### 1.2 Recommended Requirements
-
-| Component | Requirement |
-|-----------|-------------|
-| **Java Version** | JDK 21 LTS |
-| **RAM** | 4 GB or more |
-| **Disk Space** | 1 GB |
-| **Display** | 1920x1080 resolution |
-| **Network** | Broadband connection |
-
-### 1.3 Java Installation
-
-#### Windows
-
-1. Download JDK 21 from [Oracle](https://download.oracle.com/java/21/latest/jdk-21_windows-x64_bin.exe)
-2. Run the installer
-3. Verify installation:
-   ```cmd
-   java -version
-   ```
-
-#### Linux (Ubuntu/Debian)
-
-```bash
-sudo apt update
-sudo apt install openjdk-21-jdk
-java -version
-```
-
-#### Linux (RHEL/CentOS/Fedora)
-
-```bash
-sudo dnf install java-21-openjdk-devel
-java -version
-```
-
-#### macOS
-
-```bash
-brew install openjdk@21
-java -version
-```
+- **Worker**: 2 CPUs and 3 GB of memory, of which 1 GB is shared memory for Chromium. Scale the number of
+  workers with the load.
+- **API instance**: 1 CPU and 1 GB of memory.
+- **MySQL 8.4**: the results of 50 scans of about 1 800 domains take a few hundred MB, because the
+  screenshots are in S3.
 
 ---
 
 ## 2. Installation Options
 
-### 2.1 Option 1: Standalone JAR (Recommended for Development)
+| Option | For | How |
+|--------|-----|-----|
+| All-in-one JAR | One analyst, desktop | `java -jar JTypoSquatting.jar` (§ 4.1) |
+| Native installer | One analyst, without managing Java | jpackage image, MSI or EXE (§ 6) |
+| Web service | Several users | Containers: `deploy/docker-compose.prod.yml` (§ 5bis) |
 
-**Pros:**
-- Quick setup
-- No installation required
-- Easy to update
-
-**Cons:**
-- Requires Java installed separately
-- Manual startup
-
-**Steps:**
-
-1. Download `JTypoSquatting.jar` from releases
-2. Open terminal/command prompt
-3. Run:
-   ```bash
-   java -jar JTypoSquatting.jar
-   ```
-
-### 2.2 Option 2: Native Installer (Recommended for Production)
-
-**Pros:**
-- Bundled Java runtime
-- Native application experience
-- Auto-start capability
-
-**Cons:**
-- Larger download size
-- Platform-specific
-
-**Available Formats:**
-- Windows: `.msi` or `.exe`
-- macOS: `.dmg`
-- Linux: `.deb`, `.rpm`, or `.AppImage`
-
-### 2.3 Option 3: Build from Source
-
-See [Building from Source](#3-building-from-source) section.
+The GitHub releases (tags `v*`) provide the all-in-one JAR. The container images are published to
+`ghcr.io/<owner>/jtyposquatting-{api,worker,web}` (§ 7).
 
 ---
 
 ## 3. Building from Source
 
-### 3.1 Prerequisites
-
-- Git
-- JDK 21+
-- Gradle (wrapper included)
-
-### 3.2 Clone Repository
-
 ```bash
-git clone https://github.com/hernic/JTypoSquatting.git
+git clone https://github.com/dagga/JTypoSquatting.git
 cd JTypoSquatting
 ```
 
-### 3.3 Build Commands
+| Command | Result |
+|---------|--------|
+| `./gradlew build` | Compiles and tests every module |
+| `./gradlew :backend:bootJar` | Backend (API and worker): `backend/build/libs/jtyposquatting-backend.jar` |
+| `./gradlew :frontend:fatJar` | Desktop all-in-one JAR: `frontend/build/libs/JTypoSquatting.jar`, about 283 MB (backend, Swing client, Playwright driver) |
+| `./gradlew :frontend:copyFatJar` | Same, copied to the project root |
+| `./gradlew :backend:installPlaywrightBrowsers` | Installs headless Chromium in `~/.cache/ms-playwright` (`-PwithDeps` also installs the system libraries) |
+| `cd web && npm ci && npm run build` | Frontend build (`web/.next/standalone`) |
+| `docker build -f backend/Dockerfile --target api .` | API image (`--target worker` for the worker) |
+| `docker build web` | Frontend image |
 
-**Build All Modules:**
-
-```bash
-./gradlew clean build
-```
-
-**Build Optimized Fat JAR:**
-
-```bash
-./gradlew :frontend:fatJar
-```
-
-**Build and Copy JAR to Root:**
-
-```bash
-./gradlew :frontend:copyFatJar
-```
-
-**Build Native Installer (requires jpackage):**
-
-```bash
-./gradlew :frontend:packageApp      # Linux app-image
-./gradlew :frontend:packageAppMsi   # Windows MSI
-./gradlew :frontend:packageAppExe   # Windows EXE
-```
-
-### 3.4 Build Output Locations
-
-| Artifact | Location |
-|----------|----------|
-| Fat JAR | `frontend/build/libs/JTypoSquatting.jar` |
-| Copied JAR | `JTypoSquatting.jar` (root) |
-| Native Installer | `dist/` |
-
-### 3.5 Build Optimization
-
-The fat JAR is optimized to exclude unnecessary dependencies:
-
-- **Language models** (197 MB) excluded from frontend
-- **Result:** 32 MB instead of 108 MB
+`gradle.properties` may set `org.gradle.java.home` to the JDK of a developer machine. Elsewhere, override it
+with `-Dorg.gradle.java.home="$JAVA_HOME"`.
 
 ---
 
 ## 4. Running the Application
 
-### 4.1 Quick Start Script
-
-**Linux/macOS:**
+### 4.1 Desktop application
 
 ```bash
-./scripts/run.sh
-```
-
-**Windows:**
-
-```cmd
-scripts\run.bat
-```
-
-### 4.2 Lancement
-
-L'application est désormais "tout-en-un". Vous n'avez plus besoin de démarrer le backend et le frontend séparément. Il vous suffit de lancer le fichier JAR (voir section 4.3).
-
-### 4.3 Running the JAR
-
-```bash
-# Basic execution
 java -jar JTypoSquatting.jar
-
-# With custom locale (French)
-java -Duser.language=fr -Duser.country=FR -jar JTypoSquatting.jar
-
-# With increased memory
-java -Xmx2G -jar JTypoSquatting.jar
 ```
 
-### 4.4 JVM Options
+- The JAR starts the backend in **local** mode: the API listens on 127.0.0.1:8081, needs no login, and
+  keeps the scan quotas out of the way.
+- It then opens the Swing window.
+- The data is kept in memory (H2) and lost when the application stops.
+- Screenshots are stored in `${java.io.tmpdir}/jtyposquatting`.
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-Duser.language` | UI language | `en` |
-| `-Duser.country` | UI country | `US` |
-| `-Xmx` | Maximum heap size | Auto |
-| `-Djava.awt.headless` | Headless mode | `false` |
+Without a Chromium build, scans run but take no screenshot. Install it once, from the JAR:
+
+```bash
+java -cp JTypoSquatting.jar com.microsoft.playwright.CLI install chromium
+```
+
+### 4.2 Web service, development
+
+```bash
+docker compose up -d keycloak                     # OpenID Connect provider on :8180 (alice / alice)
+FORWARD_HEADERS_STRATEGY=framework ./gradlew :backend:bootRun   # API + worker on :8081
+cd web && npm run dev                              # http://localhost:3000
+```
+
+Without a profile, the backend:
+
+- runs the API and the worker in a single process;
+- uses an in-memory H2 database;
+- stores screenshots on disk.
+
+To use MySQL, run `docker compose up -d mysql` and set
+`DB_URL=jdbc:mysql://localhost:3306/jtypo DB_USER=jtypo DB_PASSWORD=jtypo-dev`.
+
+### 4.3 Web service, production
+
+See [§ 5bis](#5bis-web-service-deployment-api-and-workers).
+
+### 4.4 JVM options
+
+The container images run Java with `-XX:MaxRAMPercentage=75`. For a JAR started by hand, size the heap
+for the number of simultaneous checks, for example `java -Xmx2g -jar …`.
 
 ---
 
 ## 5. Configuration
 
-### 5.1 Configuration Files
+The backend reads `backend/src/main/resources/application.properties`. Every property can be overridden:
 
-| File | Location | Purpose |
-|------|----------|---------|
-| `application.properties` | `backend/src/main/resources/` | Backend settings |
-| `config.properties` | `frontend/src/main/resources/` | Frontend settings |
-| `messages.properties` | `frontend/src/main/resources/` | UI translations |
-| `client.properties` | `frontend/src/main/resources/` | API client config |
+- **On the command line**: `--jtypo.quota.scans-per-day=100`.
+- **As an environment variable**: dots and dashes become underscores, in upper case, e.g.
+  `JTYPO_QUOTA_SCANSPERDAY` or `JTYPO_QUOTA_SCANS_PER_DAY`.
 
-### 5.2 Backend Configuration
+Some properties also read a short variable directly (`DB_URL`, `S3_BUCKET`…).
 
-**File:** `backend/src/main/resources/application.properties`
+### 5.1 Main properties
 
-```properties
-# Server Configuration
-server.port=8080
-server.servlet.context-path=/
+| Property (environment variable) | Default | Description |
+|-------------------------------|---------|-------------|
+| `jtypo.security.mode` | `oidc` | `oidc` (web service) or `local` (desktop, no login, set by the all-in-one JAR) |
+| `jtypo.oidc.issuer-uri` (`OIDC_ISSUER_URI`) | `http://localhost:8180/realms/jtypo` | OpenID Connect issuer, discovered at the first login |
+| `jtypo.oidc.client-id` / `client-secret` (`OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`) | `jtypo-web` / development secret | Confidential client |
+| `jtypo.security.post-login-url` | `/app` | Page reached after login |
+| `server.servlet.session.cookie.secure` (`SESSION_COOKIE_SECURE`) | `false` | `true` behind HTTPS (set in the API image) |
+| `server.forward-headers-strategy` (`FORWARD_HEADERS_STRATEGY`) | `none` | `framework` behind a reverse proxy |
+| `spring.datasource.url` (`DB_URL`, `DB_USER`, `DB_PASSWORD`) | H2 in memory | `jdbc:mysql://host:3306/jtypo` in production |
+| `jtypo.storage.type` (`STORAGE_TYPE`) | `filesystem` | `filesystem` or `s3` (see `S3_*` in § 5bis) |
+| `jtypo.storage.directory` (`STORAGE_DIRECTORY`) | `${java.io.tmpdir}/jtyposquatting` | Screenshot directory of the `filesystem` storage |
+| `jtypo.quota.max-concurrent-scans` | 2 | Simultaneous scans per user |
+| `jtypo.quota.scans-per-day` | 50 | Scans per user over 24 hours |
+| `jtypo.quota.max-domains-per-scan` | 50 000 | Generated domains checked per scan |
+| `jtypo.rate-limit.requests-per-minute` | 120 | API requests per minute and per user (per IP when anonymous) |
+| `jtypo.analysis.max-concurrent-checks` | 64 | Simultaneous outbound checks per instance |
+| `jtypo.cache.ttl-hours` | 24 | A domain checked more recently is taken from the shared cache |
+| `jtypo.outbound.user-agent` | `Mozilla/5.0 (compatible; JTypoSquatting/2.0)` | User-Agent of the checks and screenshots; add a contact URL |
+| `jtypo.outbound.allow-private-addresses` | `false` | Never `true` on a public deployment (anti-SSRF) |
+| `jtypo.outbound.allowed-ports` | `80,443` | Ports that checks may contact |
+| `jtypo.screenshot.enabled` / `chromium-sandbox` | `true` / `true` | Screenshots; Chromium sandbox (`false` only inside an isolated container) |
+| `jtypo.screenshot.timeout-ms` / `max-concurrent` | 15000 / 2 | Capture timeout; browsers per instance |
+| `jtypo.worker.enabled` | `true` | Process scans in this instance |
+| `jtypo.worker.max-concurrent-scans` | 4 | Scans processed at the same time by a worker |
+| `jtypo.worker.stale-after-ms` | 120000 | A scan without heartbeat for this long is taken over by another worker |
+| `jtypo.sse.max-duration-ms` | 1800000 | Maximum duration of a live stream; the browser reconnects |
+| `jtypo.retention.scan-days` / `check-days` / `cron` | 90 / 30 / `0 30 3 * * *` | Purge of old data (§ 5bis) |
 
-# Virtual Threads (Java 21+)
-spring.threads.virtual.enabled=true
-spring.task.execution.pool.core-size=16
-spring.task.execution.pool.max-size=128
+The API documentation describes the security and quota settings in more detail: [API.md](API.md).
 
-# Jetty Configuration
-server.jetty.threads.max=200
-server.jetty.threads.min=8
+### 5.2 Spring profiles
 
-# SSE Timeout (5 minutes)
-spring.mvc.async.request-timeout=300000
-```
+| Profile | Effect |
+|---------|--------|
+| *(none)* | API and worker in the same process (development, desktop) |
+| `api` | API only; monitoring on port 8082 |
+| `worker` | Worker only; its HTTP server on port 8082 only serves monitoring |
 
-### 5.3 Frontend Configuration
+### 5.3 Desktop client
 
-**File:** `frontend/src/main/resources/config.properties`
-
-```properties
-# API Configuration
-api.default.url=http://localhost:8080
-api.timeout.ms=10000
-
-# Domain Testing
-domain.testing.timeout.ms=5000
-domain.batch.size=50
-domain.batch.delay.ms=200
-domain.max.parallel.checks=10
-
-# UI Settings
-ui.window.width=1200
-ui.window.height=800
-ui.table.row.height=24
-ui.preview.width=320
-ui.preview.height=240
-ui.max.open.dialogs=5
-
-# Logging
-log.backend.path=/tmp/jtypo-backend.log
-log.frontend.path=/tmp/jtypo-frontend.log
-```
-
-### 5.4 Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `JAVA_HOME` | Java installation path | System default |
-| `JPACKAGE_HOME` | jpackage installation path | `/usr/bin/jpackage` |
+The Swing client reads `client.properties` (`api.url=http://localhost:8081`) and `config.properties`
+(window size, preview, log paths). A `client.properties` placed next to the JAR overrides the embedded one.
 
 ---
 
-## 6. Native Installers
+## 5bis. Web Service Deployment (API and workers)
 
-### 6.1 Prerequisites for jpackage
+The backend JAR (`./gradlew :backend:bootJar`) runs in two roles, chosen with a Spring profile:
 
-**Linux:**
-
-```bash
-# Ubuntu/Debian
-sudo apt install dpkg-dev debhelper
-
-# RHEL/Fedora
-sudo dnf install rpm-build
-```
-
-**Windows:**
-- WiX Toolset 3.x (for MSI)
-- Visual Studio Build Tools (for EXE)
-
-**macOS:**
-- Xcode Command Line Tools
-
-### 6.2 Building Native Installers
-
-**Linux App Image:**
+| Role | Profile | Ports | Processes scans | Needs Chromium | Network |
+|------|---------|-------|-----------------|----------------|---------|
+| API | `api` | 8081 (API), 8082 (monitoring) | no | no | behind the reverse proxy, reaches MySQL, S3, OIDC provider |
+| Worker | `worker` | 8082 (monitoring only, API disabled) | yes | yes | **isolated**: MySQL and S3 only inside, Internet egress for checks |
 
 ```bash
-./gradlew :frontend:packageApp
-# Output: dist/JTypoSquatting/
+SPRING_PROFILES_ACTIVE=api    java -jar jtyposquatting-backend.jar   # one or more instances
+SPRING_PROFILES_ACTIVE=worker java -jar jtyposquatting-backend.jar   # scale the number of workers with the load
 ```
 
-**Windows MSI:**
+Workers coordinate through the `scans` table:
+
+- each scan is claimed by a single worker, which sends a heartbeat while it works;
+- if a worker dies, another one resumes its scans after `jtypo.worker.stale-after-ms` (2 min), without
+  checking the domains already done.
+
+API instances share sessions through MySQL (Spring Session).
+
+Main environment variables:
+
+| Variable | Used by | Description |
+|----------|---------|-------------|
+| `DB_URL`, `DB_USER`, `DB_PASSWORD` | both | `jdbc:mysql://host:3306/jtypo`; schema created by Flyway |
+| `STORAGE_TYPE=s3`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_PATH_STYLE` | both | Screenshot storage (any S3-compatible service; the bucket must exist) |
+| `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | API | OpenID Connect provider |
+| `SESSION_COOKIE_SECURE=true`, `FORWARD_HEADERS_STRATEGY=framework` | API | Behind the HTTPS reverse proxy (set in the API image) |
+| `JTYPO_OUTBOUND_USER_AGENT` | worker | User-Agent with a contact URL |
+| `JTYPO_SCREENSHOT_CHROMIUM_SANDBOX=false` | worker | In the container, which is the sandbox |
+| `jtypo.worker.max-concurrent-scans` | worker | Scans processed at the same time (default 4) |
+| `jtypo.analysis.max-concurrent-checks` | worker | Outbound checks at the same time (default 64) |
+
+Development services (MySQL, Keycloak) are described in `docker-compose.yml`.
+
+### Containers
+
+| Image | Dockerfile | Contents |
+|-------|-----------|----------|
+| API | `backend/Dockerfile`, target `api` | Temurin 21 JRE, unprivileged user |
+| Worker | `backend/Dockerfile`, target `worker` | Playwright Java 1.63 image (Java 21 + Chromium), user `pwuser` (about 4 GB) |
+| Frontend | `web/Dockerfile` | Next.js standalone server on Node 22, port 3000 |
+
+`deploy/docker-compose.prod.yml` assembles:
+
+- nginx (`deploy/nginx/jtyposquatting.conf`);
+- the frontend;
+- the API;
+- the workers;
+- MySQL.
+
+The identity provider and the S3 storage are external. Copy `deploy/.env.example` to `deploy/.env`, then:
 
 ```bash
-./gradlew :frontend:packageAppMsi
-# Output: dist/JTypoSquatting-2.0-alpha1.msi
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
 ```
 
-**Windows EXE:**
+- nginx serves the frontend and the API on the same origin, disables buffering for the SSE streams and
+  limits the request rate (API and login).
+- Containers run without capabilities, with a read-only root filesystem (tmpfs for `/tmp`, and for
+  `/home/pwuser` on the workers).
+- Workers are on an internal network (MySQL) and an egress network (Internet) only.
+  - Also block the private ranges of the egress network on the host firewall (`DOCKER-USER` chain): the
+    application-level anti-SSRF policy is the first barrier, the network the second.
+  - The Chromium sandbox is disabled in the container (no user namespaces): the container is the sandbox.
+- Terminate TLS in front of nginx (or add a 443 server) and send `X-Forwarded-Proto: https`.
+- Register `https://<site>/login/oauth2/code/oidc` as redirect URI with the identity provider. Enable PKCE
+  (always sent by the backend) and, for sign-up, a captcha.
 
-```bash
-./gradlew :frontend:packageAppExe
-# Output: dist/JTypoSquatting-2.0-alpha1.exe
-```
+### Monitoring
 
-### 6.3 Installation
+API instances and workers expose on port **8082**, never routed by nginx:
 
-**Windows:**
-1. Double-click `.msi` or `.exe` file
-2. Follow installation wizard
-3. Application available in Start Menu
+- `/actuator/health`, with the `/liveness` and `/readiness` probes;
+- `/actuator/prometheus`.
 
-**Linux (.deb):**
+Logs are written as JSON (ECS format) on the standard output of the containers, ready for a log collector.
 
-```bash
-sudo dpkg -i JTypoSquatting_2.0-alpha1_amd64.deb
-```
+| Metric | Description |
+|--------|-------------|
+| `jtypo_scans_submitted_total` | Scans created |
+| `jtypo_scans_finished_total{status}` | Scans completed, cancelled or failed |
+| `jtypo_scan_duration_seconds{status}` | Processing time of a scan |
+| `jtypo_scans_queue{status}` | Scans waiting (`PENDING`) or in progress (`RUNNING`), from the database (aggregate with `max`) |
+| `jtypo_checks_total{source}` | Domain checks served by the cache or done on the network |
+| `jtypo_check_duration_seconds` | Duration of a network check |
+| `jtypo_screenshots_total{outcome}` | Screenshots taken, failed or blocked by the anti-SSRF policy |
+| `jtypo_quota_rejections_total{type}` | Requests refused: rate limit, simultaneous scans, daily quota |
+| `jtypo_retention_deleted_total{type}` | Rows and screenshots deleted by the nightly purge |
+| `jtypo_sse_streams` | Open live streams |
 
-**Linux (.rpm):**
+`deploy/prometheus/` contains a scrape configuration and alert rules. The alerts cover:
 
-```bash
-sudo rpm -i JTypoSquatting-2.0-alpha1.x86_64.rpm
-```
+- an instance that is down;
+- scans waiting with no worker processing them;
+- a queue backlog;
+- the failure rates of scans, of the API and of screenshots;
+- a rate-limit spike.
 
-**macOS (.dmg):**
+### Backups and data retention
 
-1. Open `.dmg` file
-2. Drag application to Applications folder
+- `deploy/backup/mysql-backup.sh [dir]`: consistent dump (InnoDB, no lock), utf8mb4, gzip, completion check,
+  keeps the last `KEEP` (14) backups. Schedule it daily.
+- `deploy/backup/mysql-restore-test.sh <file>`: restores a backup into a throw-away MySQL container and
+  checks the schema. Run it regularly: an untested backup is not a backup.
+- `deploy/backup/mysql-restore.sh <file>`: restores into the deployment (stop `api` and `worker` first).
+- Screenshots are in the S3 storage: enable versioning or replication on the bucket.
+
+Workers purge old data every night (`jtypo.retention.cron`, 03:30):
+
+| Property | Default | Deleted |
+|----------|---------|---------|
+| `jtypo.retention.scan-days` | 90 | Finished scans and their results (running scans are never purged) |
+| `jtypo.retention.check-days` | 30 | Cached domain checks |
+| — | — | Screenshots no longer referenced by any result or cached check |
+
+### Continuous integration and delivery
+
+See [§ 7](#7-cicd-with-github-actions). Images are pushed to `ghcr.io/<owner>/jtyposquatting-{api,worker,web}`
+with the branch, version and commit tags. Deploying then means pulling these tags on the target host
+(`docker compose pull && docker compose up -d`); script it for your hosting.
+
+---
+
+## 6. Native Installers (desktop)
+
+`jpackage` (shipped with the JDK, `JPACKAGE_HOME` to point to another one) bundles the all-in-one JAR with a
+Java runtime. Each installer is built on its target system.
+
+| Command | Output | Requires |
+|---------|--------|----------|
+| `./gradlew :frontend:packageApp` | `dist/JTypoSquatting/` (application image) | — |
+| `./gradlew :frontend:packageAppMsi` | `dist/JTypoSquatting-2.0-alpha1.msi` | Windows, WiX Toolset 3.x |
+| `./gradlew :frontend:packageAppExe` | `dist/JTypoSquatting-2.0-alpha1.exe` | Windows, WiX Toolset 3.x |
+
+Installers do not contain Chromium. Install it once after installation
+(`java -cp JTypoSquatting.jar com.microsoft.playwright.CLI install chromium`), otherwise scans run without
+screenshots.
 
 ---
 
 ## 7. CI/CD with GitHub Actions
 
-### 7.1 Overview
+The `Build and Release` workflow (`.github/workflows/build-and-release.yml`) runs:
 
-JTypoSquatting uses GitHub Actions for automated:
-- Building and testing
-- Screenshot capture (with Xvfb)
-- Release creation
-- Artifact distribution
+- on every push and pull request to `master` or `main`;
+- on `v*` tags;
+- on manual launch.
 
-### 7.2 Workflow Configuration
+| Job | Steps |
+|-----|-------|
+| `test` | JDK 21, Chromium and its system libraries, `./gradlew test` (Testcontainers MySQL and S3Mock on the runner's Docker engine) |
+| `web` | Node 22, `npm ci`, ESLint, `npm run typecheck` (`next typegen` + `tsc`), Chromium, Playwright end-to-end tests on a production build |
+| `build` | After `test`: Gradle build and all-in-one JAR, uploaded as an artifact; GitHub release on `v*` tags |
+| `images` | After `test` and `web`: builds the `api`, `worker` and `web` images; pushes them to GHCR outside pull requests |
+| `analyze-jar-size` | Reports the size and largest entries of the JAR |
 
-**File:** `.github/workflows/build-and-release.yml`
+Every Gradle call uses the JDK installed by `setup-java` (`-Dorg.gradle.java.home="$JAVA_HOME"`).
 
-**Triggers:**
-- Push to `main` or `master` branch
-- Pull requests
-- Tag pushes (for releases)
-- Manual trigger (`workflow_dispatch`)
+Tests that contact real websites (`@Tag("network")`) do not run in CI. Run them locally with
+`./gradlew test -Dinclude.network=true`.
 
-**Jobs:**
-1. **test** - Run unit and functional tests with Xvfb
-2. **build** - Build project (depends on test)
-3. **analyze-jar-size** - Report JAR size
+**Creating a release:**
 
-### 7.3 Xvfb Configuration for Headless Testing
-
-GitHub Actions runs in headless environment. Xvfb (X Virtual Framebuffer) provides virtual display:
-
-```yaml
-- name: Install Xvfb
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y xvfb libgtk-3-0 libxrender1 libxtst6 libxi6
-
-- name: Set up virtual display
-  run: |
-    Xvfb :99 -screen 0 1280x1024x24 &
-    export DISPLAY=:99
-    echo "DISPLAY=:99" >> $GITHUB_ENV
-    sleep 2  # Wait for Xvfb to start
-
-- name: Verify Xvfb
-  run: |
-    ps aux | grep Xvfb
-    echo "DISPLAY is: $DISPLAY"
-
-- name: Run tests
-  run: |
-    export DISPLAY=:99
-    ./gradlew test --no-daemon
+```bash
+# version=… in gradle.properties, then:
+git tag v2.0-alpha1
+git push origin v2.0-alpha1
 ```
 
-### 7.4 Test Modes
+The release contains `JTypoSquatting-<version>.jar` and `JTypoSquatting.jar`.
 
-Tests have two modes based on environment:
+**Running the CI checks locally:**
 
-| Environment | Mode | Screenshot Requirement |
-|-------------|------|----------------------|
-| **CI (GitHub Actions)** | Strict | Required (Xvfb provided) |
-| **Local (no display)** | Tolerant | Optional (tests pass) |
-| **Local (with Xvfb)** | Tolerant | Optional |
-
-**Detection:**
-```java
-boolean isCI = System.getenv("CI") != null || System.getenv("GITHUB_ACTIONS") != null;
-
-if (isCI) {
-    // Strict mode: screenshot required
-    assertNotNull(result.getScreenshot());
-} else {
-    // Tolerant mode: screenshot optional
-    if (result.getScreenshot() != null) {
-        assertTrue(result.getScreenshot().length > 0);
-    }
-}
-```
-
-### 7.5 Running Tests Locally
-
-**Without Xvfb (default):**
 ```bash
 ./gradlew test
-# Tests pass even without screenshots
+cd web && npm run lint && npm run typecheck && npm run test:e2e
 ```
-
-**With Xvfb (for full testing):**
-```bash
-# Install Xvfb
-sudo apt install xvfb
-
-# Start virtual display
-Xvfb :99 -screen 0 1280x1024x24 &
-export DISPLAY=:99
-
-# Run tests
-./gradlew test
-```
-
-### 7.6 Automated Build Process
-
-```yaml
-on:
-  push:
-    branches: [main]
-    tags: [v*]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-      - run: ./gradlew clean build
-      - run: ./gradlew :frontend:fatJar
-```
-
-### 7.7 Creating a Release
-
-1. **Update version in `gradle.properties`:**
-   ```properties
-   version=2.0-alpha1
-   ```
-
-2. **Commit and tag:**
-   ```bash
-   git add gradle.properties
-   git commit -m "Release version 2.0-alpha1"
-   git tag v2.0-alpha1
-   git push origin v2.0-alpha1
-   ```
-
-3. **GitHub Actions will:**
-   - Build the project
-   - Create optimized JAR
-   - Create GitHub Release
-   - Attach JAR artifacts
-
-### 7.8 Release Artifacts
-
-After successful build, artifacts are available:
-- `JTypoSquatting-{version}.jar` - Versioned JAR
-- `JTypoSquatting.jar` - Latest JAR
 
 ---
 
 ## 8. Troubleshooting
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed troubleshooting, especially:
-- [Testing Issues](TROUBLESHOOTING.md#5-testing-issues)
-- [CI/CD Issues](TROUBLESHOOTING.md#6-cicd-issues)
-
-### 8.1 Common Issues
-
-#### Issue: "Cannot connect to API server"
-
-**Cause:** Backend not running
-
-**Solution:**
-```bash
-# Start backend first
-./gradlew :backend:bootRun
-
-# Then start frontend in another terminal
-./gradlew :frontend:run
-```
-
-#### Issue: "Java 21 not found"
-
-**Cause:** Wrong Java version in PATH
-
-**Solution:**
-```bash
-# Check Java version
-java -version
-
-# Set JAVA_HOME if needed
-export JAVA_HOME=/path/to/jdk-21
-export PATH=$JAVA_HOME/bin:$PATH
-```
-
-#### Issue: "Out of memory"
-
-**Cause:** Insufficient heap for screenshots
-
-**Solution:**
-```bash
-java -Xmx2G -jar JTypoSquatting.jar
-```
-
-#### Issue: "Screenshots not displaying"
-
-**Cause:** JavaFX runtime issue
-
-**Solution:**
-1. Ensure JDK 21+ with JavaFX
-2. Check backend logs for screenshot errors
-3. Verify display server is running
-
-#### Issue: Build fails with "Virtual Threads not supported"
-
-**Cause:** Java version < 21
-
-**Solution:**
-```bash
-# Upgrade to Java 21
-sudo apt install openjdk-21-jdk  # Ubuntu/Debian
-```
-
-### 8.2 Log Files
-
-| Log | Location | Purpose |
-|-----|----------|---------|
-| Backend | `/tmp/jtypo-backend.log` | Backend API logs |
-| Frontend | `/tmp/jtypo-frontend.log` | Frontend UI logs |
-
-**View Logs:**
-
-```bash
-tail -f /tmp/jtypo-backend.log
-tail -f /tmp/jtypo-frontend.log
-```
-
-### 8.3 Debug Mode
-
-**Enable Debug Logging:**
-
-```bash
-# Backend
-java -Dlogging.level.com.aleph.graymatter=DEBUG -jar backend.jar
-
-# Frontend
-java -Dlogging.level.com.aleph.graymatter=DEBUG -jar JTypoSquatting.jar
-```
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md): build, login, API errors, live results, scans, screenshots,
+tests, containers.
 
 ---
 
 ## 9. Uninstallation
 
-### 9.1 JAR Installation
-
-Simply delete the JAR file:
-
-```bash
-rm JTypoSquatting.jar
-```
-
-### 9.2 Native Installer (Windows)
-
-1. Open Control Panel → Programs and Features
-2. Find "JTypoSquatting"
-3. Click Uninstall
-
-### 9.3 Native Installer (Linux)
-
-**Debian/Ubuntu:**
-
-```bash
-sudo apt remove jtyposquatting
-```
-
-**RHEL/Fedora:**
-
-```bash
-sudo dnf remove JTypoSquatting
-```
-
-### 9.4 Clean All Data
-
-```bash
-# Remove logs
-rm /tmp/jtypo-*.log
-
-# Remove database (if created)
-rm -rf ~/.jtyposquatting/
-```
+| What | How |
+|------|-----|
+| All-in-one JAR | Delete the JAR; screenshots are in `${java.io.tmpdir}/jtyposquatting` |
+| Native installer (Windows) | *Settings › Apps*, uninstall JTypoSquatting |
+| Native application image (Linux) | Delete `dist/JTypoSquatting/` |
+| Chromium used for screenshots | Delete `~/.cache/ms-playwright` (shared with other Playwright tools) |
+| Development services | `docker compose down -v` (deletes the MySQL volume) |
+| Web service | `docker compose -f deploy/docker-compose.prod.yml down`; add `-v` to delete the database, then empty the S3 bucket |
 
 ---
 
 ## Appendix A: File Locations
 
-| File/Directory | Purpose |
-|----------------|---------|
-| `JTypoSquatting.jar` | Executable JAR |
-| `backend/build/libs/` | Backend JARs |
-| `frontend/build/libs/` | Frontend JARs |
-| `dist/` | Native installers |
-| `/tmp/jtypo-*.log` | Log files |
-
----
+| Path | Content |
+|------|---------|
+| `backend/src/main/resources/application*.properties` | Backend configuration and profiles |
+| `backend/src/main/resources/db/migration/{mysql,h2}` | Flyway migrations |
+| `deploy/docker-compose.prod.yml`, `deploy/.env.example` | Production deployment |
+| `deploy/nginx/`, `deploy/prometheus/`, `deploy/backup/` | Reverse proxy, monitoring, backups |
+| `deploy/keycloak/jtypo-realm.json` | Development realm |
+| `docker-compose.yml` | Development services (Keycloak, MySQL) |
+| `web/messages/{fr,en}.json` | Frontend texts, including the provisional legal texts |
+| `${java.io.tmpdir}/jtyposquatting` | Screenshots (`filesystem` storage) |
+| `~/.cache/ms-playwright` | Chromium used for screenshots |
 
 ## Appendix B: Port Usage
 
-| Port | Service | Configurable |
-|------|---------|--------------|
-| 8080 | Backend API | Yes (`server.port`) |
-
----
+| Port | Service |
+|------|---------|
+| 3000 | Frontend (Next.js; `npm run dev` or container) |
+| 3100 | Frontend served by the end-to-end tests |
+| 8081 | Backend API (desktop: 127.0.0.1 only) |
+| 8082 | Monitoring of the `api` and `worker` instances (`/actuator/*`) |
+| 8180 | Keycloak (development) |
+| 3306 | MySQL (development: 127.0.0.1 only) |
+| 80 | nginx (production compose, `HTTP_PORT`) |
 
 ## Appendix C: Quick Reference
 
 ```bash
-# Build
-./gradlew clean build
+# Desktop
+./gradlew :frontend:fatJar && java -jar frontend/build/libs/JTypoSquatting.jar
 
-# Run (development)
-./gradlew :backend:bootRun    # Terminal 1
-./gradlew :frontend:run       # Terminal 2
+# Web service, development
+docker compose up -d keycloak
+FORWARD_HEADERS_STRATEGY=framework ./gradlew :backend:bootRun
+cd web && npm run dev
 
-# Run (production)
-java -jar JTypoSquatting.jar
+# Web service, production
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
 
-# Create release
-git tag v2.0-alpha1 && git push origin v2.0-alpha1
+# Tests
+./gradlew test
+cd web && npm run test:e2e
+
+# Backups
+deploy/backup/mysql-backup.sh /var/backups/jtyposquatting
+deploy/backup/mysql-restore-test.sh /var/backups/jtyposquatting/<file>.sql.gz
 ```
-
----
-
-*End of Document*

@@ -1,0 +1,31 @@
+# Development services for JTypoSquatting.
+#   docker compose up -d keycloak     # OpenID Connect provider on http://localhost:8180 (admin/admin, user alice/alice)
+#   docker compose up -d mysql        # MySQL 8.4 on localhost:3306, then run the backend with
+#                                     #   DB_URL=jdbc:mysql://localhost:3306/jtypo DB_USER=jtypo DB_PASSWORD=jtypo-dev
+# Never use these credentials outside a developer machine.
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: jtypo
+      MYSQL_USER: jtypo
+      MYSQL_PASSWORD: jtypo-dev
+      MYSQL_ROOT_PASSWORD: root-dev
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8180:8180"
+    volumes:
+      - ./deploy/keycloak/jtypo-realm.json:/opt/keycloak/data/import/jtypo-realm.json:ro
+
+volumes:
+  mysql-data:

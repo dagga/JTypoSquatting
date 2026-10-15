@@ -1,0 +1,59 @@
+# Alerts of the JTypoSquatting service. The queue gauges are reported by every instance with the same
+# value: aggregate them with max().
+groups:
+  - name: jtyposquatting
+    rules:
+      - alert: JTypoInstanceDown
+        expr: up{job=~"jtyposquatting-.*"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "{{ $labels.job }} instance {{ $labels.instance }} is down"
+
+      - alert: JTypoNoWorkerProcessing
+        expr: max(jtypo_scans_queue{status="PENDING"}) > 0 and max(jtypo_scans_queue{status="RUNNING"}) == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: "Scans are waiting but no worker is processing them"
+
+      - alert: JTypoScanQueueBacklog
+        expr: max(jtypo_scans_queue{status="PENDING"}) > 20
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} scans waiting: add workers"
+
+      - alert: JTypoScanFailureRate
+        expr: >
+          sum(rate(jtypo_scans_finished_total{status="FAILED"}[30m]))
+          / clamp_min(sum(rate(jtypo_scans_finished_total[30m])), 1e-9) > 0.1
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 10% of scans fail"
+
+      - alert: JTypoApiErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{job="jtyposquatting-api",status=~"5.."}[5m]))
+          / clamp_min(sum(rate(http_server_requests_seconds_count{job="jtyposquatting-api"}[5m])), 1e-9) > 0.05
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of API requests fail with a server error"
+
+      - alert: JTypoScreenshotFailureRate
+        expr: >
+          sum(rate(jtypo_screenshots_total{outcome="failure"}[30m]))
+          / clamp_min(sum(rate(jtypo_screenshots_total[30m])), 1e-9) > 0.5
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than half of the screenshots fail (Chromium crashing or out of memory?)"
+
+      - alert: JTypoRateLimitSpike
+        expr: sum(rate(jtypo_quota_rejections_total{type="rate"}[5m])) > 1
+        for: 10m
+        labels: { severity: info }
+        annotations:
+          summary: "Sustained rate-limit rejections: possible abuse"

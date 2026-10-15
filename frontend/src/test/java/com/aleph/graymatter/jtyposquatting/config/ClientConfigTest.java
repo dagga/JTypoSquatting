@@ -6,34 +6,34 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour ClientConfig — chargement de l'URL API et fallback par défaut.
+ * Unit tests of ClientConfig: loading of the API URL and default fallback.
  */
 class ClientConfigTest {
 
     @Test
-    @DisplayName("L'URL API par défaut est 'http://localhost:8081'")
+    @DisplayName("The default API URL is 'http://localhost:8081'")
     void testDefaultApiUrl() {
-        // Si client.properties est absent (classpath de test), on doit avoir la valeur par défaut
+        // Without client.properties (test classpath), the default value is used
         String url = ClientConfig.getApiUrl();
-        assertNotNull(url, "L'URL API ne doit pas être null");
-        assertFalse(url.isBlank(), "L'URL API ne doit pas être vide");
+        assertNotNull(url, "The API URL must not be null");
+        assertFalse(url.isBlank(), "The API URL must not be blank");
     }
 
     @Test
-    @DisplayName("setApiUrl() modifie l'URL retournée par getApiUrl()")
+    @DisplayName("setApiUrl() changes the URL returned by getApiUrl()")
     void testSetApiUrl() {
         String original = ClientConfig.getApiUrl();
         try {
             ClientConfig.setApiUrl("http://backend-server:9090");
             assertEquals("http://backend-server:9090", ClientConfig.getApiUrl());
         } finally {
-            // Restaurer la valeur d'origine pour ne pas contaminer les autres tests
+            // Restore the original value so that other tests are not affected
             ClientConfig.setApiUrl(original);
         }
     }
 
     @Test
-    @DisplayName("setApiUrl() avec null ne lève pas d'exception et peut être relu")
+    @DisplayName("setApiUrl() with null throws no exception and can be read back")
     void testSetApiUrlNull() {
         String original = ClientConfig.getApiUrl();
         try {
@@ -45,13 +45,12 @@ class ClientConfigTest {
     }
 
     @Test
-    @DisplayName("L'URL par défaut est celle attendue si client.properties est absent")
+    @DisplayName("The default URL is the expected one when client.properties is missing")
     void testDefaultUrlValue() {
-        // On force le rechargement en testant la valeur actuelle
-        // Si le classpath de test ne contient pas client.properties, doit être localhost:8081
+        // Checks the current value; without client.properties on the test classpath, it is localhost:8081
         String url = ClientConfig.getApiUrl();
-        // L'URL doit être une URL HTTP valide
+        // The URL must be a valid HTTP URL
         assertTrue(url == null || url.startsWith("http"),
-                "L'URL API doit commencer par 'http' : " + url);
+                "The API URL must start with 'http': " + url);
     }
 }

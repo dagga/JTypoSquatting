@@ -1,0 +1,180 @@
+{
+  "Metadata": {
+    "title": "JTypoSquatting — typosquatting detection",
+    "description": "Generate the variants of a domain name (typos, homoglyphs, extensions...) and find the ones that are registered and online."
+  },
+  "Nav": {
+    "home": "Home",
+    "algorithms": "How it works",
+    "faq": "FAQ",
+    "app": "My scans",
+    "login": "Log in",
+    "logout": "Log out",
+    "language": "Language",
+    "skip": "Skip to content"
+  },
+  "Footer": {
+    "legal": "Legal notice",
+    "terms": "Terms of use",
+    "privacy": "Privacy"
+  },
+  "Home": {
+    "title": "Find the domains that imitate yours",
+    "lead": "Typosquatters register domains almost identical to yours to phish your customers or capture their traffic. JTypoSquatting generates these variants and checks which ones are online.",
+    "cta": "Start a scan",
+    "how": "How it works",
+    "step1Title": "Generate",
+    "step1": "21 algorithms produce thousands of variants: typos, look-alike characters, extensions, hyphens, plurals…",
+    "step2Title": "Check",
+    "step2": "Each variant is contacted: HTTP response, TLS certificate, title, language, screenshot.",
+    "step3Title": "Analyse",
+    "step3": "Results arrive live and can be exported as CSV or JSON for your security or legal teams."
+  },
+  "Algorithms": {
+    "title": "How it works",
+    "lead": "Each scan applies 21 generation algorithms to the domain, then checks every variant.",
+    "families": {
+      "characters": "Characters",
+      "charactersText": "Omission, repetition, swap, addition or vowel change: exmple.com, exxample.com, exmaple.com.",
+      "keyboard": "Keyboard",
+      "keyboardText": "Neighbouring keys on QWERTY and AZERTY keyboards: wxample.com, gppgle.com.",
+      "visual": "Homoglyphs",
+      "visualText": "Look-alike characters: accented letters, digits and letter pairs (éxample.com, examp1e.com, exarnple.com).",
+      "separators": "Dots and hyphens",
+      "separatorsText": "Hyphens added or removed, dots missing or added: ex-ample.com, wwwexample.com, ex.ample.com.",
+      "words": "Words",
+      "wordsText": "Common misspellings, homophones, plurals, numbers as words: forseasons.com, shopforyou.com.",
+      "suffixes": "Extensions",
+      "suffixesText": "Other extensions, added extensions, wrong second level, dynamic DNS: example.fr, example.com.br, example.duckdns.org."
+    },
+    "checksTitle": "What is checked",
+    "checks": "For each variant: HTTP response, TLS certificate validity, page title, description and language, and a screenshot taken in an isolated browser. Checks less than 24 hours old are shared between users."
+  },
+  "Faq": {
+    "title": "Frequently asked questions",
+    "q1": "Does the service visit the sites it finds?",
+    "a1": "Yes, from an isolated infrastructure and with an identifiable User-Agent. Your browser never contacts these sites, unless you open a link after the warning.",
+    "q2": "How many scans can I run?",
+    "a2": "Two simultaneous scans and fifty per 24-hour period, to keep the service fair.",
+    "q3": "Why do some domains show strange characters?",
+    "a3": "They are homoglyphs: characters that look alike (é and e, 1 and l, rn and m). The technical form (punycode, xn--…) is also shown for internationalised domains.",
+    "q4": "What does an \"untrusted\" certificate mean?",
+    "a4": "The site presents a self-signed or expired certificate, or one issued for another name. This is common on fraudulent domains."
+  },
+  "Legal": {
+    "title": "Legal notice",
+    "body": "Publisher, publication director and host: to be completed before going live."
+  },
+  "Terms": {
+    "title": "Terms of use",
+    "body": "The service is meant to protect your own brands and domains. Any use aimed at probing third-party sites at scale, bypassing quotas or harming others is forbidden. Full text to be validated by counsel before going live."
+  },
+  "Privacy": {
+    "title": "Privacy",
+    "body": "We keep your identifier, your e-mail address and the history of your scans, to provide the service. Scans are deleted after 90 days. You can export your data or delete your account at any time from \"My scans › My data\". Data controller and contact: to be completed before going live."
+  },
+  "App": {
+    "title": "My scans",
+    "loginRequired": "Log in to start and follow your scans.",
+    "loading": "Loading…",
+    "newScan": "New scan",
+    "domainLabel": "Domain name",
+    "domainPlaceholder": "example.com",
+    "forceRefresh": "Ignore the cache (check every domain again)",
+    "start": "Scan",
+    "starting": "Starting…",
+    "history": "History",
+    "empty": "No scans yet.",
+    "open": "Open",
+    "errors": {
+      "invalidDomain": "This domain name is not valid.",
+      "quota": "Quota reached: {message}. Try again in {seconds} s.",
+      "generic": "Something went wrong. Please try again later.",
+      "forbidden": "This scan does not belong to you.",
+      "notFound": "Scan not found."
+    },
+    "loginFailed": "Login failed. Please try again; if the problem persists, contact us."
+  },
+  "Scan": {
+    "back": "All scans",
+    "titleFor": "Scan of {domain}",
+    "status": {
+      "PENDING": "Pending",
+      "RUNNING": "Running",
+      "COMPLETED": "Completed",
+      "CANCELLED": "Cancelled",
+      "FAILED": "Failed"
+    },
+    "progress": "{checked} / {total} domains checked",
+    "cancel": "Cancel scan",
+    "counters": {
+      "checked": "Checked",
+      "online": "Online",
+      "suspicious": "Suspicious",
+      "unreachable": "Unreachable"
+    },
+    "filter": "Filter",
+    "onlyOnline": "Online domains only",
+    "export": "Export",
+    "columns": {
+      "domain": "Domain",
+      "status": "Status",
+      "http": "HTTP",
+      "tls": "TLS",
+      "title": "Title",
+      "language": "Language"
+    },
+    "noResults": "No results yet.",
+    "streamError": "The live connection was lost. Reload the page.",
+    "domainStatus": {
+      "Suspicious": "Suspicious",
+      "Safe": "Online",
+      "Unreachable": "Unreachable",
+      "Active": "Active",
+      "Dead": "Inactive",
+      "Testing": "Testing…",
+      "Unknown": "Unknown"
+    },
+    "tlsStatus": {
+      "VALID": "Valid",
+      "EXPIRED": "Expired",
+      "HOSTNAME_MISMATCH": "Wrong name",
+      "UNTRUSTED": "Untrusted",
+      "HANDSHAKE_FAILED": "TLS failure",
+      "NONE": "—"
+    }
+  },
+  "Details": {
+    "close": "Close",
+    "punycode": "Technical form",
+    "screenshot": "Screenshot",
+    "noScreenshot": "No screenshot for this domain.",
+    "description": "Description",
+    "homepage": "Start of the page",
+    "headers": "HTTP headers",
+    "checkedAt": "Checked on {date}",
+    "visit": "Open the site…"
+  },
+  "Warning": {
+    "title": "Open a potentially malicious site?",
+    "body": "{domain} may host phishing or malware. The screenshot usually lets you assess it safely. Do not enter any information on this site.",
+    "confirm": "Open anyway",
+    "cancel": "Cancel"
+  },
+  "NotFound": {
+    "title": "Page not found",
+    "back": "Back to home"
+  },
+  "Account": {
+    "title": "My data",
+    "export": "Export my data (JSON)",
+    "exportHelp": "Your profile, your scans and their results, in a reusable format.",
+    "delete": "Delete my account",
+    "deleteHelp": "Permanently erases your account, your scans and the screenshots nobody else uses.",
+    "confirmTitle": "Permanently delete your account?",
+    "confirmBody": "Your scans and their results will be erased. This cannot be undone. Your identity provider account is managed separately.",
+    "confirm": "Delete permanently",
+    "cancel": "Cancel",
+    "error": "Deletion failed. Please try again later."
+  }
+}
