@@ -19,42 +19,93 @@ Version **2.0-alpha1**. It comes in two forms:
 
 ## How it works
 
-1. **Generate**: 21 algorithms turn `example.com` into thousands of candidates.
+1. **Generate**: 21 algorithms turn a domain into its plausible variants, about 1,800 for `example.com`.
+   Up to **50,000 domains** are checked per scan (`jtypo.quota.max-domains-per-scan`).
 2. **Check**: each candidate is contacted.
    - HTTP response and TLS certificate (a self-signed or expired certificate is reported as a signal).
    - Page title, description and language (12 languages detected).
    - Screenshot taken in an isolated headless Chromium.
 3. **Analyse**: results arrive live. Filter them, open the details, and export them as CSV or JSON.
 
-| Family | Algorithms | Example |
-|--------|-----------|---------|
-| Characters | omission, repetition, changeOrder, addition, vowelSwap | `example.com` → `exmple.com`, `exmaple.com` |
-| Keyboard | replacement, doubleReplacement (QWERTY and AZERTY) | `example.com` → `wxample.com`, `google.com` → `gppgle.com` |
-| Dots and dashes | addDash, stripDash, missingDot, subdomain, changeDotDash | `example.com` → `ex-ample.com`, `ex.ample.com` |
-| Look-alike characters | homoglyph | `example.com` → `ехаmple.com` (Cyrillic) |
-| Words | commonMisspelling, homophones, singularPluralize, numeralSwap | `fourseasons.com` → `forseasons.com`, `shop4you.com` → `shopforyou.com` |
-| Extensions | wrongTld, addTld, wrongSld, addDynamicDns | `example.com` → `example.fr`, `example.com.br`, `example.duckdns.org` |
+### Generation algorithms
 
-Details: [Technical reference](doc/TECHNICAL_REFERENCE.md#25-algorithm-registry).
+Each algorithm reproduces a mistake that a user makes, or a trick that a typosquatter uses. The examples
+below are real outputs of the generators. The number in brackets is how many variants each algorithm
+produces for `example.com`.
+
+#### Typing mistakes on characters
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `omission` (7) | One character is missing: a key was not pressed hard enough. | `example.com` → `exmple.com` |
+| `repetition` (7) | One character is typed twice. | `example.com` → `exxample.com` |
+| `changeOrder` (6) | Two neighbouring characters are swapped, as when typing fast. | `example.com` → `exmaple.com` |
+| `addition` (36) | One letter or digit is added at the end of the name. | `example.com` → `examplea.com`, `example1.com` |
+| `vowelSwap` (15) | A vowel is replaced by another, a common spelling confusion. | `example.com` → `exemple.com` |
+
+#### Keyboard mistakes (QWERTY and AZERTY)
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `replacement` (38) | A character is replaced by a neighbouring key on a QWERTY or AZERTY keyboard. | `example.com` → `wxample.com`; `amazon.com` → `qmazon.com` (AZERTY) |
+| `doubleReplacement` | A doubled letter is replaced by a doubled neighbouring key. | `google.com` → `gppgle.com` |
+
+#### Dots and dashes
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `addDash` (6) | A dash is inserted inside the name. | `example.com` → `ex-ample.com` |
+| `stripDash` | The dashes of the name are removed. | `my-example.com` → `myexample.com` |
+| `missingDot` | A dot is forgotten. Only names that end with a real extension are kept. | `www.example.com` → `wwwexample.com`; `example.co.uk` → `exampleco.uk` |
+| `subdomain` (6) | A dot is inserted inside the name. The registered domain then becomes the end of the name, so whoever owns `ample.com` controls `ex.ample.com`. | `example.com` → `ex.ample.com` |
+| `changeDotDash` | A dot is typed as a dash. Only names that end with a real extension are kept. | `www.example.com` → `www-example.com`; `example.co.uk` → `example-co.uk` |
+
+#### Look-alike characters
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `homoglyph` (62) | A character is replaced by one that looks the same: accented letter, digit, or a pair of letters (`rn` for `m`). | `example.com` → `éxample.com`, `examp1e.com`, `exarnple.com` |
+
+#### Words
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `commonMisspelling` | A word of the name is replaced by a common misspelling of it (list of frequent English errors). | `absence.com` → `absense.com` |
+| `homophones` | A word is replaced by a word that sounds the same. | `fourseasons.com` → `forseasons.com` |
+| `singularPluralize` (1) | A trailing `s` is added or removed. | `example.com` → `examples.com` |
+| `numeralSwap` | A digit is written as a word, or a word as a digit. | `shop4you.com` → `shopforyou.com`; `oneclick.com` → `1click.com` |
+
+#### Extensions
+
+| Algorithm | What it generates | Example |
+|-----------|-------------------|---------|
+| `wrongTld` (1,435) | The extension is replaced by another one (all known extensions). | `example.com` → `example.fr`, `example.shop` |
+| `addTld` (150) | A country code is appended, when that gives a registrable extension. | `example.com` → `example.com.br` |
+| `wrongSld` | The second level of a country extension is changed. | `example.co.uk` → `example.org.uk` |
+| `addDynamicDns` (14) | The name is registered under a free dynamic DNS service, often used for phishing. | `example.com` → `example.duckdns.org` |
+
+Details and implementation: [Technical reference](doc/TECHNICAL_REFERENCE.md#2-domain-generation-algorithms).
 
 ### 🚧 Algorithms still to develop
 
-The 21 algorithms above are all implemented. Reference tools such as
-[dnstwist](https://github.com/elceef/dnstwist) and [URLCrazy](https://github.com/urbanadventurer/urlcrazy)
-cover other techniques that JTypoSquatting does not generate yet:
+Reference tools such as [dnstwist](https://github.com/elceef/dnstwist) and
+[URLCrazy](https://github.com/urbanadventurer/urlcrazy) cover techniques that JTypoSquatting does not
+generate yet:
 
-| Algorithm | Status | What it generates | Example |
-|-----------|--------|-------------------|---------|
+| Algorithm | Status | What it would generate | Example |
+|-----------|--------|------------------------|---------|
 | **Combosquatting** (dictionary) | ⏳ To do | The brand combined with words used in phishing (login, secure, support, account, pay…). These are the most common phishing domains today. | `example.com` → `example-login.com`, `secure-example.com` |
-| **Insertion** | ⏳ To do | A neighbouring key typed inside the label. `addition` only appends a character at the end. | `example.com` → `exsample.com` |
-| **Bitsquatting** | ⏳ To do | One bit flipped in a character (memory or transmission errors). | `example.com` → `dxample.com`, `uxample.com` |
-| **Whole-label homoglyphs** | ⏳ To do | All look-alike letters replaced at once, for example the whole label in Cyrillic. `homoglyph` replaces one character at a time. | `example.com` → `ехаmрlе.com` |
-| **Extension inside the label** | ⏳ To do | The extension glued to the label, then another extension. | `example.com` → `examplecom.net`, `example-com.com` |
+| **Insertion** | ⏳ To do | A neighbouring key typed inside the name. `addition` only appends a character at the end. | `example.com` → `exsample.com` |
+| **Bitsquatting** | ⏳ To do | One bit flipped in a character, caused by memory or transmission errors. | `example.com` → `dxample.com`, `uxample.com` |
+| **Homoglyphs from other alphabets** | ⏳ To do | Cyrillic or Greek letters identical to Latin ones, alone or for the whole name at once. `homoglyph` only uses Latin look-alikes, one character at a time. | `example.com` → `ехаmple.com` (Cyrillic е, х, а) |
+| **Extension inside the name** | ⏳ To do | The extension glued to the name, then another extension. | `example.com` → `examplecom.net`, `example-com.com` |
 
-To add one, write a generator in `backend/src/main/java/com/aleph/graymatter/jtyposquatting/generator/`,
-then declare it in the `Algorithm` enum: `NewAlgorithmsTest` checks that every declared algorithm generates
-variants. Keep the cap on generated domains in mind (`jtypo.quota.max-domains-per-scan`, 3000 by default):
-dictionary-based algorithms produce many candidates.
+To add one:
+1. Write a generator in `backend/src/main/java/com/aleph/graymatter/jtyposquatting/generator/`.
+2. Declare it in the `Algorithm` enum: `NewAlgorithmsTest` checks that every declared algorithm generates
+   variants.
+
+Dictionary-based algorithms produce many candidates; the 50,000-domain limit per scan leaves room for them.
 
 ---
 
@@ -181,7 +232,7 @@ Before going live, also take care of the following:
 - the legal texts.
 
 See the [deployment guide](doc/DEPLOYMENT.md#5bis-web-service-deployment-api-and-workers) and
-[compliance](doc/CONFORMITE.md).
+[compliance](doc/COMPLIANCE.md).
 
 ---
 
@@ -195,9 +246,9 @@ See the [deployment guide](doc/DEPLOYMENT.md#5bis-web-service-deployment-api-and
 | [Technical reference](doc/TECHNICAL_REFERENCE.md) | Algorithms, mappings, classes |
 | [Architecture](doc/ARCHITECTURE.md) | Software architecture |
 | [Troubleshooting](doc/TROUBLESHOOTING.md) | Common issues |
-| [Compliance](doc/CONFORMITE.md) | GDPR register, retention, users' rights, abuse handling (draft, in French) |
-| [Action plan](doc/plan-action.md) | Roadmap towards the public web service and its progress (in French) |
-| [Audit](doc/audit.md) | Code audit behind the action plan (in French) |
+| [Compliance](doc/COMPLIANCE.md) | GDPR register, retention, users' rights, abuse handling (draft) |
+| [Action plan](doc/ACTION_PLAN.md) | Roadmap towards the public web service and its progress |
+| [Audit](doc/AUDIT.md) | Code audit behind the action plan |
 
 ---
 

@@ -1,113 +1,51 @@
-# JTypoSquatting Documentation
+# JTypoSquatting documentation
 
-**Version:** 2.0-alpha1
+**Version:** 2.0-alpha1. The project overview, the list of generation algorithms and the quick starts are
+in the [README](../README.md) at the project root.
 
----
+JTypoSquatting comes in two forms:
+- a **web service** for several users: Next.js frontend, Spring Boot API and workers, MySQL, S3 storage,
+  OpenID Connect login;
+- a **desktop application**: all-in-one JAR with a Swing window, running the API in local mode.
 
-## Documentation Index
+## Getting started
 
-This directory contains complete documentation for JTypoSquatting.
+| Document | Content |
+|----------|---------|
+| [QUICK_START.md](QUICK_START.md) | Run the web service in development, or the desktop application |
+| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Known issues: Chromium, login, quotas, live results, tests, build |
 
-### Getting Started
+## Using and integrating
 
-| Document | Description | Read Time |
-|----------|-------------|-----------|
-| [QUICK_START.md](QUICK_START.md) | Get running in 5 minutes | 5 min |
-| [DEPLOYMENT.md](DEPLOYMENT.md) | Installation and configuration | 15 min |
-| [TROUBLESHOOTING.md](TROUBLESHOOTING.md) | Common issues and solutions | As needed |
+| Document | Content |
+|----------|---------|
+| [API.md](API.md) | Authentication, scans, live results (SSE), quotas, screenshots, account; legacy desktop endpoints |
+| [FUNCTIONAL_ARCHITECTURE.md](FUNCTIONAL_ARCHITECTURE.md) | Use cases and business flows of the web service and of the desktop application |
 
-### Architecture & Design
+## Architecture and implementation
 
-| Document | Description | Audience |
-|----------|-------------|----------|
-| [ARCHITECTURE_TECHNIQUE_ET_APPLICATIVE.md](ARCHITECTURE_TECHNIQUE_ET_APPLICATIVE.md) | Architecture technique et applicative complète avec 7 schémas UML Mermaid | Architectes, Développeurs, Tech Leads |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Software architecture (components, patterns, technology) | Architects, Developers |
-| [FUNCTIONAL_ARCHITECTURE.md](FUNCTIONAL_ARCHITECTURE.md) | Functional architecture (use cases, business logic) | Analysts, Product Owners |
-| [audit.md](audit.md) | Audit de code approfondi, analyse de sécurité, concurrence et plan de remédiation | Développeurs, Sécurité, QA |
-| [CONFORMITE.md](CONFORMITE.md) | Conformité : registre RGPD, durées de conservation, droits des personnes, abus (brouillon à valider) | Juridique, DPO, Product Owner |
-| [plan-action.md](plan-action.md) | Plan d'action : évolution vers un service web public multi-utilisateurs (Next.js, MySQL, sécurité) | Tech Leads, Développeurs, DevOps |
+| Document | Content |
+|----------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Software architecture: components, deployment roles, architecture decisions |
+| [TECHNICAL_ARCHITECTURE.md](TECHNICAL_ARCHITECTURE.md) | Technical and application architecture with diagrams |
+| [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) | Every generation algorithm with examples, class reference, database schema, configuration |
 
-### Technical Reference
+## Operating the service
 
-| Document | Description | Audience |
-|----------|-------------|----------|
-| [API.md](API.md) | REST API and SSE documentation | API Consumers, Integrators |
-| [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) | Algorithms, mappings, class reference | Developers |
+| Document | Content |
+|----------|---------|
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Build, configuration, containers, monitoring, backups and retention, CI/CD |
+| [COMPLIANCE.md](COMPLIANCE.md) | GDPR register, retention periods, users' rights, abuse handling (draft for legal review) |
 
----
+## Project history
 
-## Quick Links
+| Document | Content |
+|----------|---------|
+| [AUDIT.md](AUDIT.md) | Code audit of the original desktop application; most findings are now fixed |
+| [ACTION_PLAN.md](ACTION_PLAN.md) | Action plan towards the public web service and its progress |
 
-### For New Users
-1. Start with [QUICK_START.md](QUICK_START.md)
-2. Refer to [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if issues occur
+## Keeping the documentation up to date
 
-### For Developers
-1. Read [ARCHITECTURE.md](ARCHITECTURE.md) for system overview
-2. Check [API.md](API.md) for API details
-3. Use [TECHNICAL_REFERENCE.md](TECHNICAL_REFERENCE.md) for implementation details
-
-### For DevOps
-1. Follow [DEPLOYMENT.md](DEPLOYMENT.md) for installation
-2. Check CI/CD section for automated builds
-
----
-
-## Documentation Overview
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    JTypoSquatting Docs                      │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-┌───────▼────────┐   ┌────────▼────────┐   ┌──────▼───────┐
-│   Getting      │   │   Architecture  │   │   Technical  │
-│   Started      │   │   & Design      │   │   Reference  │
-└───────┬────────┘   └────────┬────────┘   └──────┬───────┘
-        │                     │                     │
-   ┌────┴────┐           ┌────┴────┐           ┌────┴────┐
-   │         │           │         │           │         │
-   ▼         ▼           ▼         ▼           ▼         ▼
-QUICK   DEPLOYMENT   ARCHITECT.  FUNCTIONAL   API    TECHNICAL
-START                            ARCHITECT.          REFERENCE
-   │
-   ▼
-TROUBLE-
-SHOOTING
-```
-
----
-
-## Related Files
-
-| File | Location | Purpose |
-|------|----------|---------|
-| README.md | Project root | Project overview and quick reference |
-| build.gradle | Project root | Build configuration |
-| gradle.properties | Project root | Version and project settings |
-| .github/workflows/ | GitHub Actions | CI/CD pipeline |
-
----
-
-## Contributing to Documentation
-
-When updating documentation:
-
-1. **Keep README.md concise** - Reference detailed docs instead of duplicating content
-2. **Update related docs together** - Changes in code may require doc updates
-3. **Follow markdown conventions** - Consistent formatting across all docs
-4. **Test commands and examples** - Ensure all code snippets work as documented
-
----
-
-## Document Changelog
-
-| Date | Document | Changes |
-|------|----------|---------|
-| March 2025 | All | Initial comprehensive documentation for v2.0-alpha1 |
-
----
-
-*For questions or documentation issues, please create a GitHub issue.*
+- Describe what the code does, and check names, endpoints, properties and default values in the code.
+- Run the examples you document. Generation examples come from the actual generators.
+- Update the README and the related documents in the same change as the code.

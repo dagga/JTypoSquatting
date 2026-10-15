@@ -1,607 +1,368 @@
-# JTypoSquatting - Software Architecture Documentation
+# JTypoSquatting - Software Architecture
 
-**Version:** 2.0-alpha1  
-**Last Updated:** March 2025  
-**Status:** Draft
+**Version:** 2.0-alpha1 (branch `feature/web-public`)
+**See also:** [Technical architecture](TECHNICAL_ARCHITECTURE.md) (detailed, with UML diagrams) · [API](API.md) · [Deployment](DEPLOYMENT.md)
 
 ---
 
 ## Table of Contents
 
-1. [Introduction](#1-introduction)
-2. [System Overview](#2-system-overview)
-3. [Architecture Patterns](#3-architecture-patterns)
-4. [System Components](#4-system-components)
-5. [Technology Stack](#5-technology-stack)
+1. [Overview](#1-overview)
+2. [Runtime Modes](#2-runtime-modes)
+3. [Components](#3-components)
+4. [Scan Processing](#4-scan-processing)
+5. [Domain Analysis Engine](#5-domain-analysis-engine)
 6. [Data Architecture](#6-data-architecture)
-7. [Integration Architecture](#7-integration-architecture)
-8. [Security Architecture](#8-security-architecture)
-9. [Performance Architecture](#9-performance-architecture)
-10. [Deployment Architecture](#10-deployment-architecture)
+7. [Security Architecture](#7-security-architecture)
+8. [Concurrency and Limits](#8-concurrency-and-limits)
+9. [Operations](#9-operations)
+10. [Technology Stack](#10-technology-stack)
 11. [Architecture Decisions](#11-architecture-decisions)
-12. [Appendices](#12-appendices)
+12. [Source Layout](#12-source-layout)
 
 ---
 
-## 1. Introduction
+## 1. Overview
 
-### 1.1 Purpose
+JTypoSquatting generates the typo variants of a domain name with 21 algorithms, checks each variant
+(HTTP, TLS certificate, page content, screenshot) and streams the results to the user.
 
-This document provides a comprehensive description of the software architecture for JTypoSquatting, a typo squatting domain detection tool. It serves as a reference for developers, architects, and stakeholders involved in the development, maintenance, and deployment of the system.
-
-### 1.2 Scope
-
-JTypoSquatting generates potential typo squatted domains from a given domain name and checks their status (active, dead, or unreachable). The system provides real-time feedback through a graphical user interface and stores results in a local database.
-
-### 1.3 Definitions and Acronyms
-
-| Term | Definition |
-|------|------------|
-| **Typo Squatting** | Practice of registering domain names similar to popular domains to exploit typing errors |
-| **SSE** | Server-Sent Events - push technology for real-time server-to-client communication |
-| **DTO** | Data Transfer Object - design pattern for data transfer between layers |
-| **Virtual Threads** | Lightweight threads introduced in Java 21 (Project Loom) |
-| **TLD** | Top-Level Domain (e.g., .com, .org, .eu) |
-
----
-
-## 2. System Overview
-
-### 2.1 System Context
+It is primarily a **public, multi-user web service**: a Next.js frontend and a Spring Boot backend, with
+scans processed asynchronously by workers. The original **desktop application** (Swing) still works on
+the same backend, in a dedicated local mode.
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              JTypoSquatting System                          │
-│                                                                             │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                 │
-│  │   Frontend   │◄──►│   Backend    │◄──►│   Database   │                 │
-│  │   (Swing)    │    │ (Spring Boot)│    │    (H2)      │                 │
-│  └──────────────┘    └──────────────┘    └──────────────┘                 │
-│         │                   │                                              │
-│         │                   │                                              │
-│         ▼                   ▼                                              │
-│  ┌──────────────┐    ┌──────────────┐                                     │
-│  │    User      │    │  External    │                                     │
-│  │  (Security   │    │   Websites   │                                     │
-│  │   Analyst)   │    │  (HTTP/S)    │                                     │
-│  └──────────────┘    └──────────────┘                                     │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+Browser ──► nginx ─┬─ /                       ─► Next.js (public pages + application)
+                   └─ /api, /oauth2, /login,  ─► API instances (Spring Boot, profile "api")
+                      /logout                       │
+                                                    ├─► MySQL 8.4 (users, scans, results, cache, sessions)
+                                                    ├─► S3-compatible storage (screenshots)
+                                                    └─► OpenID Connect provider (Keycloak in development)
 
-### 2.2 System Goals
-
-| Goal | Description | Priority |
-|------|-------------|----------|
-| **Real-time Processing** | Stream domain check results as they complete | High |
-| **High Concurrency** | Check hundreds of domains simultaneously | High |
-| **User Experience** | Intuitive GUI with live updates and previews | High |
-| **Data Persistence** | Store results for later analysis | Medium |
-| **Offline Capability** | Run locally without cloud dependencies | Medium |
-
----
-
-## 3. Architecture Patterns
-
-### 3.1 Client-Server Architecture
-
-The system follows a **client-server architecture** with clear separation between:
-
-- **Client (Frontend)**: Swing-based desktop application
-- **Server (Backend)**: Spring Boot REST API with SSE support
-
-### 3.2 Layered Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      Presentation Layer                         │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │   JTypoFrame    │  │  PreviewPanel   │  │   LogPanel      │ │
-│  │   (Main UI)     │  │  (Screenshot)   │  │  (Log Viewer)   │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│                         Service Layer                           │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │DomainStreaming  │  │  ConfigManager  │  │   RestClient    │ │
-│  │    Service      │  │     (i18n)      │  │                 │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-├─────────────────────────────────────────────────────────────────┤
-│                          Data Layer                             │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐ │
-│  │  DomainResult   │  │  DomainPage     │  │  Configuration  │ │
-│  │      DTO        │  │      DTO        │  │   Properties    │ │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘ │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 3.3 Event-Driven Architecture (SSE)
-
-Server-Sent Events enable real-time communication:
-
-```
-┌──────────────┐                              ┌──────────────┐
-│   Backend    │                              │   Frontend   │
-│              │                              │              │
-│  Generate    │                              │              │
-│  Domains     │                              │              │
-│      │       │                              │              │
-│      ▼       │                              │              │
-│  Stream SSE  │────data: {...}──────────────►│  Update UI   │
-│  Events      │────data: {...}──────────────►│  Update UI   │
-│              │────data: {...}──────────────►│  Update UI   │
-│              │                              │              │
-└──────────────┘                              └──────────────┘
+             Worker instances (Spring Boot + Chromium, profile "worker")
+             ├─ claim queued scans in MySQL, check domains, store results and screenshots
+             └─ isolated network: MySQL and S3 inside, Internet egress for the checks
 ```
 
 ---
 
-## 4. System Components
+## 2. Runtime Modes
 
-### 4.1 Component Diagram
+The same backend artifact (`jtyposquatting-backend.jar`) runs in four configurations.
 
-```
-                                    ┌─────────────────┐
-                                    │   JTypoSquat    │
-                                    │     (Main)      │
-                                    └────────┬────────┘
-                                             │
-                    ┌────────────────────────┼────────────────────────┐
-                    │                        │                        │
-           ┌────────▼────────┐    ┌──────────▼─────────┐   ┌─────────▼────────┐
-           │    Frontend     │    │      Backend       │   │      Shared      │
-           │   (Swing UI)    │    │  (Spring Boot API) │   │  (Common Code)   │
-           └────────┬────────┘    └──────────┬─────────┘   └─────────┬────────┘
-                    │                        │                       │
-     ┌──────────────┼──────────────┐        │        ┌──────────────┼──────────────┐
-     │              │              │        │        │              │              │
-┌────▼────┐  ┌─────▼─────┐  ┌────▼────┐   │   ┌────▼────┐  ┌──────▼──────┐  ┌────▼────┐
-│  UI     │  │ Streaming │  │  REST   │   │   │Controller│  │   Service   │  │ Domain  │
-│Components│  │  Service  │  │ Client  │   │   │          │  │   Layer     │  │  Gen    │
-└─────────┘  └───────────┘  └─────────┘   │   └──────────┘  └─────────────┘  └─────────┘
-                                           │
-                                    ┌──────▼──────┐
-                                    │  Database   │
-                                    │    (H2)     │
-                                    └─────────────┘
-```
+| Mode | How | HTTP | Scan worker | Security | Database |
+|------|-----|------|-------------|----------|----------|
+| Development (default) | `./gradlew :backend:bootRun` | API on :8081 | yes | OIDC | H2 in memory |
+| `api` profile | `SPRING_PROFILES_ACTIVE=api` | API on :8081, monitoring on :8082 | no | OIDC | MySQL |
+| `worker` profile | `SPRING_PROFILES_ACTIVE=worker` | monitoring only, on :8082 | yes | — | MySQL |
+| Desktop (`local`) | `java -jar JTypoSquatting.jar` (`CombinedLauncher`) | API on 127.0.0.1:8081 | yes | none | H2 in memory |
 
-### 4.2 Module Descriptions
-
-#### 4.2.1 Frontend Module
-
-| Component | Responsibility | Technology |
-|-----------|---------------|------------|
-| `JTypoFrame` | Main application window, table display | Java Swing |
-| `DomainStreamingService` | SSE event handling, domain tracking | Java Concurrent |
-| `PreviewPanel` | Screenshot display | Java Swing |
-| `LogPanel` | Log file tailing and display | Java IO |
-| `DomainDetailsDialog` | Domain detail view | Java Swing |
-| `ConfigManager` | i18n and configuration management | Java ResourceBundle |
-
-#### 4.2.2 Backend Module
-
-| Component | Responsibility | Technology |
-|-----------|---------------|------------|
-| `TypoSquattingController` | Domain generation/checking endpoint | Spring Boot + Virtual Threads |
-| `DomainDataController` | Data management endpoints | Spring Boot |
-| `DomainCheckService` | Domain availability checking | Java HTTP Client |
-| `PageAnalyzer` | Web page analysis (anti-SSRF HTTP client) | Apache HttpClient 5, JSoup |
-| `PlaywrightScreenshotService` | Screenshot capture | Playwright, headless Chromium |
-| `DatabaseService` | H2 database operations | JDBC |
-
-#### 4.2.3 Shared Module
-
-| Component | Responsibility | Technology |
-|-----------|---------------|------------|
-| `JTypoSquatting` | Domain generation algorithms | Java |
-| `DomainResultDTO` | Data transfer object | Java |
-| `DomainPageDTO` | Page analysis DTO | Java |
-| `LanguageDetector` | Language detection | Lingua Library |
-
-### 4.3 Domain Generation Algorithms
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    Domain Generation Pipeline                       │
-│                                                                     │
-│  Input: www.example.com                                             │
-│         │                                                           │
-│         ▼                                                           │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐│
-│  │    Dash     │  │  Homoglyph  │  │  Misspell   │  │    TLD     ││
-│  │  Generator  │  │  Generator  │  │  Generator  │  │  Generator ││
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────┬──────┘│
-│         │                │                │                │        │
-│         └────────────────┴────────────────┴────────────────┘        │
-│                              │                                      │
-│                              ▼                                      │
-│                    ┌─────────────────┐                              │
-│                    │  Deduplicated   │                              │
-│                    │  Domain List    │                              │
-│                    └─────────────────┘                              │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-#### Algorithm Details
-
-| Algorithm | Description | Example |
-|-----------|-------------|---------|
-| **Dash** | Add, remove, or move hyphens | `example.com` → `ex-ample.com` |
-| **Homoglyph** | Replace characters with visually similar ones | `example` → `ехаmple` (Cyrillic) |
-| **Misspell** | Common spelling mistakes (English) | `absence` → `absense` |
-| **TLD** | Change or add TLDs | `example.eu` → `example.fr`, `example.eu.com` |
+| Property | Effect |
+|----------|--------|
+| `jtypo.security.mode` | `oidc` (default): login required on `/api/**`. `local`: no login, legacy endpoints enabled |
+| `jtypo.worker.enabled` | Enables `ScanWorker`, `RetentionService` and scheduling (`SchedulingConfig`) |
+| `jtypo.api.enabled` | `false` on workers: `ScanController`, `UserController`, `AccountController`, `ScreenshotController` are not loaded |
 
 ---
 
-## 5. Technology Stack
+## 3. Components
 
-### 5.1 Runtime Environment
+### 3.1 Web frontend (`web/`)
 
-| Component | Technology | Version | Purpose |
-|-----------|------------|---------|---------|
-| **JDK** | OpenJDK | 21+ | Virtual Threads support |
-| **Build Tool** | Gradle | 9.0 | Dependency management, build automation |
+- **Framework:** Next.js 16.4 (App Router, Cache Components, partial prefetching), React 19.3, TypeScript, Tailwind 4.
+- **Pages:**
+  - Public pages are prerendered statically (home, algorithms, FAQ, legal notice, terms, privacy), in `/fr` and `/en`.
+  - The application (`/[locale]/app`, `/[locale]/app/scans/[id]`) is rendered on the client.
+- **i18n:** `next-intl`. `src/proxy.ts` (the Next 16 equivalent of middleware) picks the locale prefix
+  from `Accept-Language`.
+- **Backend access:** same origin, through nginx in production and through `rewrites` in development
+  (`BACKEND_URL`, default `http://localhost:8081`). `src/lib/api.ts`:
+  - session cookie, CSRF token read from the `XSRF-TOKEN` cookie and sent in `X-XSRF-TOKEN`;
+  - `EventSource` for the live results.
+- **Results table:** virtualised (`@tanstack/react-virtual`); events are applied in batches every 250 ms.
+  Tested with 50,000 rows.
+- **Security headers:** static CSP set in `next.config.ts`. A nonce-based CSP would make every page dynamic.
 
-### 5.2 Frontend Technologies
+### 3.2 Backend (`backend/`)
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Java Swing** | Built-in | Desktop UI framework |
-| **Gson** | 2.10.1 | JSON serialization/deserialization |
-| **Guava** | 33.1.0-jre | Utility libraries |
+| Package | Responsibility | Main classes |
+|---------|---------------|--------------|
+| `config` | Security chains, OIDC client, scheduling | `SecurityConfig`, `LazyClientRegistrationRepository`, `JsonLogoutSuccessHandler`, `SchedulingConfig` |
+| `scan` | Scans as jobs: API, queue, worker, SSE, shared cache | `ScanController`, `ScanService`, `ScanRepository`, `ScanWorker`, `ScanEventStreamer`, `DomainChecker`, `DomainCheckRepository`, `ScanResultRepository`, `UserRepository`, `ScanQueueMetrics` |
+| `generator` | 21 generation algorithms | `Algorithm` (registry), `CharacterEdits`, `Keyboard`, `DotDash`, `Dash`, `Homoglyph`, `Misspell`, `Words`, `Suffixes`, `TLD`, `DomainParts` |
+| `service` | Analysis of one domain | `DomainCheckService`, `PageAnalyzer`, `PlaywrightScreenshotService` |
+| `security` | Outbound (anti-SSRF) policy | `OutboundPolicy`, `GuardedDnsResolver`, `BlockedDestinationException` |
+| `abuse` | Rate limiting and quota errors | `RateLimitFilter`, `QuotaExceededException`, `QuotaExceptionHandler` |
+| `storage` | Screenshots outside the database | `ScreenshotStore`, `S3ScreenshotStore`, `FileSystemScreenshotStore`, `ScreenshotController`, `ScreenshotGarbageCollector`, `StorageConfig` |
+| `account` | GDPR export and account deletion | `AccountController`, `AccountService` |
+| `retention` | Nightly purge | `RetentionService` |
+| `persistence` | Stored form of domain names (punycode) | `DomainKeys` |
+| `controller`, `db` | Legacy API of the desktop app (local mode only) and current user | `TypoSquattingController`, `DomainDataController`, `DatabaseService`, `UserController` |
 
-### 5.3 Backend Technologies
+### 3.3 Shared module (`shared/`)
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| **Spring Boot** | 3.5.0 | REST API framework |
-| **Jetty** | Built-in | Embedded servlet container |
-| **H2 Database** | 2.2.224 | Embedded database |
-| **JSoup** | 1.17.2 | HTML parsing |
-| **Lingua** | 1.2.1 | Language detection |
+DTOs used by the backend and the Swing client (`DomainResultDTO`, `DomainPageDTO`, `GenerationRequestDTO`,
+`DomainStatus`, `TlsStatus`) and the domain name model (`DomainName`, validated with Guava `InternetDomainName`).
 
-### 5.4 Infrastructure
+### 3.4 Desktop client (`frontend/`)
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **CI/CD** | GitHub Actions | Automated builds and releases |
-| **Package** | jpackage | Native installers (MSI, EXE, app-image) |
+A Swing application (`JTypoFrame`) that uses the legacy endpoints (`/api/generate-and-check`,
+`/api/data/**`, `/api/cancel*`). `CombinedLauncher` starts the backend in the same JVM with
+`server.address=127.0.0.1`, `jtypo.security.mode=local` and raised quotas, then opens the window.
+`:frontend:fatJar` builds the all-in-one `JTypoSquatting.jar`.
+
+---
+
+## 4. Scan Processing
+
+### 4.1 Lifecycle
+
+```
+POST /api/scans ──► PENDING ──(claimed by a worker)──► RUNNING ──► COMPLETED
+                       │                                  │  └──► FAILED
+                       └──────── DELETE /api/scans/{id} ──┴────► CANCELLED
+         RUNNING with a heartbeat older than 2 min ──► claimed again by another worker
+```
+
+1. **Creation (`ScanService`)**:
+   - the domain is validated and stored in punycode;
+   - the user row is upserted;
+   - quotas are checked against the `scans` table: 2 active scans and 50 scans per 24 h by default.
+     They are therefore global to all API instances.
+2. **Claim (`ScanRepository.claim`)**:
+   - every second, workers list claimable scans;
+   - each worker then runs a conditional `UPDATE … WHERE status='PENDING' OR (status='RUNNING' AND heartbeat_at < ?)`;
+   - only one worker can win, on MySQL as on H2. There is no `SKIP LOCKED` and no separate job table.
+3. **Processing (`ScanWorker`)**:
+   - generation through `JTypoSquatting` and the `Algorithm` registry, capped at 50,000 domains
+     (`jtypo.quota.max-domains-per-scan`);
+   - one virtual thread per domain;
+   - each result is inserted in `scan_results` as soon as it is known.
+4. **Heartbeat**:
+   - every 5 s, `heartbeat_at` and `checked_domains` are updated;
+   - if the update affects no row (scan cancelled or taken over), the worker stops its checks.
+5. **Resumption**: a worker that takes over a scan skips the domains already in `scan_results`.
+
+### 4.2 Shared cache (`DomainChecker`)
+
+- **Cache hit:** a domain checked less than 24 h ago (`jtypo.cache.ttl-hours`), by any user, is read from
+  `domain_checks`.
+- **Forced check:** `forceRefresh` bypasses the cache.
+- **Cache miss:** a real check updates the cache, and its screenshot goes to the `ScreenshotStore`.
+- **History:** results are copied into `scan_results` as snapshots, so refreshing the cache never changes a
+  past scan.
+
+### 4.3 Live results (`ScanEventStreamer`)
+
+`GET /api/scans/{id}/events` reads the database every 500 ms. The stream therefore works whichever
+instance runs the scan.
+
+| Event | Content |
+|-------|---------|
+| `result` | `ScanResultDTO`; the SSE `id` is the auto-increment id of the result |
+| `progress` | `ScanDTO`, sent when status or counters change |
+| `end` | Final `ScanDTO`, then the stream closes |
+
+- **Resumption:** `Last-Event-ID` resumes after the last received result.
+- **Keep-alive:** a comment is sent every 15 s.
+- **Length:** a stream lasts at most 30 minutes; the browser then reconnects.
+- **Headers:** responses carry `Cache-Control: no-cache, no-transform` and `X-Accel-Buffering: no`, so that
+  Next.js and nginx neither compress nor buffer them.
+
+---
+
+## 5. Domain Analysis Engine
+
+### 5.1 Generation
+
+`JTypoSquatting` applies every value of the `Algorithm` enum to the base domain and removes duplicates
+and the base domain itself. `DomainParts` splits names with the Public Suffix List (`co.uk` is one suffix).
+Candidates that are not valid names are dropped; dot/dash variants must also end with a real public suffix.
+
+| Family | Algorithms |
+|--------|-----------|
+| Characters | omission, repetition, changeOrder, addition, vowelSwap |
+| Keyboard (QWERTY + AZERTY) | replacement, doubleReplacement |
+| Dots and dashes | addDash, stripDash, missingDot, subdomain, changeDotDash |
+| Look-alike characters | homoglyph (Latin look-alikes: accents, digits, `rn` for `m`; no Cyrillic) |
+| Words | commonMisspelling, homophones, singularPluralize, numeralSwap |
+| Extensions | wrongTld, addTld, wrongSld, addDynamicDns |
+
+A scan of `example.com` generates about 1,800 domains, most of them TLD variants. Details:
+[Technical reference](TECHNICAL_REFERENCE.md).
+
+### 5.2 Checking one domain
+
+```
+DomainChecker ─► DomainCheckService (semaphore: 64 checks per instance)
+                   └─► PageAnalyzer
+                         ├─ Apache HttpClient 5 + GuardedDnsResolver (OutboundPolicy)
+                         │    HTTPS with strict validation → on certificate error: TlsStatus + HTTP fallback
+                         │    manual redirects (max 5, each hop re-checked), body ≤ 2 MB
+                         ├─ JSoup: title, meta description/keywords/author/og:*
+                         ├─ Lingua: language (12 languages)
+                         └─ PlaywrightScreenshotService (2xx page with text)
+```
+
+- **Status:** HTTP 200 → `SUSPICIOUS`, other HTTP codes → `SAFE`, no response → `UNREACHABLE`.
+- **TLS:** `TlsStatus` takes one of `VALID`, `EXPIRED`, `HOSTNAME_MISMATCH`, `UNTRUSTED`, `HANDSHAKE_FAILED`, `NONE`.
+- **Internationalised domains:** they are contacted in their punycode form.
+- **Timeouts:** connection 3 s, response 10 s; at most 4 connections per host and 200 in total.
+
+### 5.3 Screenshots
+
+`PlaywrightScreenshotService` captures pages with headless Chromium (Playwright 1.63):
+- a bounded pool of browsers, 2 by default;
+- a fresh `BrowserContext` per capture, with downloads and service workers disabled;
+- every request issued by the page is checked by `OutboundPolicy`;
+- PNG at 1280×800, with a 15 s timeout.
+
+Screenshots are stored by `ScreenshotStore`, addressed by the SHA-256 of their content (`screenshots/<sha256>.png`):
+- **S3** (`jtypo.storage.type=s3`), for the web service;
+- **filesystem** (`filesystem`), for development and the desktop app.
+
+They are served by `GET /api/screenshots/{sha256}` only to a user who owns a scan containing them.
 
 ---
 
 ## 6. Data Architecture
 
-### 6.1 Database Schema
+Flyway migrations, one set per database (`db/migration/mysql`, `db/migration/h2`):
 
-```sql
--- Domain Results Table
-CREATE TABLE domain_results (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    domain VARCHAR(255) NOT NULL UNIQUE,
-    status VARCHAR(50),
-    title VARCHAR(500),
-    language VARCHAR(50),
-    description TEXT,
-    http_code INTEGER,
-    http_headers TEXT,
-    screenshot BLOB,
-    homepage_text TEXT,
-    meta_description TEXT,
-    meta_keywords TEXT,
-    meta_author TEXT,
-    detected_language VARCHAR(50),
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-### 6.2 Entity Relationship Diagram
+| Migration | Content |
+|-----------|---------|
+| V1 | `users`, `scans`, `domain_checks`, `scan_results` |
+| V2 | Spring Session tables (`SPRING_SESSION`, `SPRING_SESSION_ATTRIBUTES`) |
+| V3 | `domain_page_data` (legacy table of the desktop app) |
+| V4 | Index on `scan_results.screenshot_key` |
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    DomainResults Table                      │
-├─────────────────────────────────────────────────────────────┤
-│  PK: id (BIGINT)                                            │
-│  UK: domain (VARCHAR)                                       │
-│                                                             │
-│  Core Fields:                                               │
-│  ├── status (VARCHAR) - Suspicious/Safe/Dead/Testing       │
-│  ├── http_code (INTEGER) - HTTP response code              │
-│  ├── http_headers (TEXT) - Response headers (JSON)         │
-│  │                                                          │
-│  Content Fields:                                            │
-│  ├── title (VARCHAR) - Page title                          │
-│  ├── description (TEXT) - Page description                 │
-│  ├── language (VARCHAR) - Detected language                │
-│  ├── screenshot (BLOB) - Page screenshot                   │
-│  │                                                          │
-│  Metadata:                                                  │
-│  ├── meta_description (TEXT)                               │
-│  ├── meta_keywords (TEXT)                                  │
-│  ├── meta_author (TEXT)                                    │
-│  └── timestamp (TIMESTAMP) - Analysis timestamp            │
-└─────────────────────────────────────────────────────────────┘
+users (id = OIDC subject) 1 ──── n scans (id UUID, status, counters, worker_id, heartbeat_at)
+                                        1 ──── n scan_results (id auto-increment = SSE event id,
+                                                               UNIQUE (scan_id, domain), snapshot)
+domain_checks (domain PK): shared cache, latest check of each domain
 ```
 
-### 6.3 Data Flow
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   User       │     │   Frontend   │     │   Backend    │
-│   Input      │     │              │     │              │
-└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
-       │                    │                    │
-       │ Enter domain       │                    │
-       │───────────────────►│                    │
-       │                    │                    │
-       │                    │ Generate & Check   │
-       │                    │───────────────────►│
-       │                    │                    │
-       │                    │  SSE Stream        │
-       │                    │◄───────────────────│
-       │                    │  (Domain Results)  │
-       │                    │                    │
-       │                    │ Save to DB         │
-       │                    │───────────────────►│
-       │                    │                    │
-       │                    │                    │ Query/Save
-       │                    │                    │◄──────► DB
-       │                    │                    │
-       │ Display Results    │                    │
-       │◄───────────────────│                    │
-       │                    │                    │
-```
+- **Domain names:** stored in lower-case punycode with an `ascii_bin` collation in MySQL. MySQL's default
+  `utf8mb4_0900_ai_ci` would treat `exämple.com` and `example.com` as equal. The Unicode form is kept for display.
+- **Large or variable fields:** HTTP headers go in a JSON column (`CLOB` on H2). Screenshots are never stored
+  in the database, only their key.
+- **Deletions:** `ON DELETE CASCADE` from `users` to `scans` and from `scans` to `scan_results`.
 
 ---
 
-## 7. Integration Architecture
+## 7. Security Architecture
 
-### 7.1 Internal Integration
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Internal Component Flow                     │
-└─────────────────────────────────────────────────────────────────┘
-
-Frontend Components:
-┌──────────────┐    HTTP    ┌──────────────┐
-│  JTypoFrame  │───────────►│ RestClient   │
-└──────────────┘            └──────────────┘
-                                    │
-                                    │ SSE Stream
-                                    ▼
-                            ┌──────────────┐
-                            │  Streaming   │
-                            │   Service    │
-                            └──────────────┘
-
-Backend Components:
-┌──────────────┐    Virtual   ┌──────────────┐
-│  Controller  │───Threads───►│   Service    │
-└──────────────┘              └──────────────┘
-                                      │
-                                      ▼
-                              ┌──────────────┐
-                              │  PageAnalyzer│
-                              └──────────────┘
-                                      │
-                                      ▼
-                              ┌──────────────┐
-                              │  Database    │
-                              │   Service    │
-                              └──────────────┘
-```
-
-### 7.2 External Integration
-
-| External System | Protocol | Purpose |
-|-----------------|----------|---------|
-| **Target Websites** | HTTP/HTTPS | Domain availability checking, screenshot capture |
-| **DNS Servers** | DNS | Domain resolution verification |
+| Threat | Measure | Where |
+|--------|---------|-------|
+| Unauthenticated access | `/api/**` requires a session (401, no redirect); legacy endpoints only exist in local mode | `SecurityConfig` |
+| Account takeover | OIDC authorization code with PKCE (S256). The OIDC discovery is lazy, so the app starts without the IdP. Session in an httpOnly cookie, `SameSite=Lax`, `Secure` behind HTTPS, stored by Spring Session | `SecurityConfig`, `LazyClientRegistrationRepository` |
+| CSRF | `XSRF-TOKEN` cookie and `X-XSRF-TOKEN` header for modifying requests | `SpaCsrfTokenRequestHandler` |
+| Access to another user's data | Ownership check on scans, results and SSE streams (403); screenshots only for owners (404) | `ScanService`, `ScreenshotController` |
+| SSRF through generated domains | Private, loopback, link-local, CGNAT, reserved, multicast, NAT64/6to4/Teredo, ULA ranges refused. The client connects to the validated address. Ports 80/443 only. Redirects re-checked | `OutboundPolicy`, `GuardedDnsResolver` |
+| Hostile pages | Fresh Chromium context per capture, page requests filtered. In production: unprivileged containers, read-only root, isolated network | `PlaywrightScreenshotService`, `deploy/` |
+| Ignored certificate errors | No permissive TrustManager. Certificate problems are reported as `TlsStatus` | `PageAnalyzer` |
+| Abuse | 120 requests/min per user (per IP when anonymous). 2 simultaneous scans and 50 per 24 h. 50,000 domains per scan. 64 outbound checks per instance. Identifiable User-Agent | `RateLimitFilter`, `ScanService`, `DomainCheckService` |
+| Browser-side attacks | Strict CSP on the API (`default-src 'none'`), static CSP on the frontend, HSTS, `Referrer-Policy`, `Permissions-Policy`, no CORS (same origin) | `SecurityConfig`, `next.config.ts` |
+| Logout | `POST /logout` returns the IdP end-session URL as JSON; the browser navigates to it | `JsonLogoutSuccessHandler` |
 
 ---
 
-## 8. Security Architecture
+## 8. Concurrency and Limits
 
-### 8.1 Security Considerations
+| Limit | Default | Property |
+|-------|---------|----------|
+| Scans processed at the same time per worker | 4 | `jtypo.worker.max-concurrent-scans` |
+| Outbound checks at the same time per instance | 64 | `jtypo.analysis.max-concurrent-checks` |
+| Browsers per instance | 2 | `jtypo.screenshot.max-concurrent` |
+| Domains per scan | 50,000 | `jtypo.quota.max-domains-per-scan` |
+| Worker heartbeat / takeover delay | 5 s / 2 min | `jtypo.worker.heartbeat-interval-ms` / `stale-after-ms` |
+| Queue polling | 1 s | `jtypo.worker.poll-interval-ms` |
 
-| Aspect | Implementation |
-|--------|----------------|
-| **Local Execution** | All processing runs locally, no data sent to external servers |
-| **Database** | H2 embedded database with file-based storage |
-| **Network** | Outbound connections only to target domains |
-| **User Data** | No user authentication required (single-user tool) |
-
-### 8.2 Security Boundaries
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Security Perimeter                       │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │              Trusted Zone (Local)                     │ │
-│  │                                                       │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐           │ │
-│  │  │ Frontend │  │ Backend  │  │ Database │           │ │
-│  │  └──────────┘  └──────────┘  └──────────┘           │ │
-│  │                                                       │ │
-│  └───────────────────────────────────────────────────────┘ │
-│                          │                                  │
-│                          │ Outbound HTTP/S only            │
-│                          ▼                                  │
-│  ┌───────────────────────────────────────────────────────┐ │
-│  │            Untrusted Zone (Internet)                  │ │
-│  │                                                       │ │
-│  │         Target domains (potential typos)              │ │
-│  │                                                       │ │
-│  └───────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
+Scans, checks and SSE streams run on virtual threads (Java 21).
 
 ---
 
-## 9. Performance Architecture
+## 9. Operations
 
-### 9.1 Virtual Threads Architecture
+- **Monitoring:** Actuator on port 8082 for the `api` and `worker` profiles. `health` (with `liveness` and
+  `readiness` probes), `info` and `prometheus` are exposed; nginx never routes `/actuator`. Business metrics:
+  `jtypo_scans_submitted_total`, `jtypo_scans_finished_total{status}`, `jtypo_scan_duration_seconds`,
+  `jtypo_scans_queue{status}`, `jtypo_checks_total{source}`, `jtypo_check_duration_seconds`,
+  `jtypo_screenshots_total{outcome}`, `jtypo_quota_rejections_total{type}`, `jtypo_sse_streams`,
+  `jtypo_retention_deleted_total{type}`. Alert rules are in `deploy/prometheus/alerts.yml`.
+- **Logs:** JSON (ECS) in the containers (`LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs`).
+- **Retention:** every night at 03:30, on workers, `RetentionService` deletes:
+  - finished scans after 90 days;
+  - cached checks after 30 days;
+  - screenshots that are no longer referenced (`ScreenshotGarbageCollector`).
+- **GDPR:**
+  - `GET /api/me/export` exports all the user's data;
+  - `DELETE /api/me` deletes the user, their scans and their unshared screenshots, and ends their other
+    sessions; the frontend then logs out.
+- **Backups:** `deploy/backup/` contains the dump, restore and restore-test scripts for MySQL.
+- **Containers:**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│              Virtual Thread Pool (Java 21+)                     │
-│                                                                 │
-│  ┌─────────┐  ┌─────────┐  ┌─────────┐     ┌─────────┐        │
-│  │ Thread  │  │ Thread  │  │ Thread  │ ... │ Thread  │        │
-│  │   #1    │  │   #2    │  │   #3    │     │   #N    │        │
-│  │ (1 KB)  │  │ (1 KB)  │  │ (1 KB)  │     │ (1 KB)  │        │
-│  └────┬────┘  └────┬────┘  └────┬────┘     └────┬────┘        │
-│       │           │           │                │              │
-│       └───────────┴───────────┴────────────────┘              │
-│                           │                                    │
-│                           ▼                                    │
-│              ┌─────────────────────────┐                      │
-│              │   Domain Check Tasks    │                      │
-│              │  (HTTP + Screenshot)    │                      │
-│              └─────────────────────────┘                      │
-└─────────────────────────────────────────────────────────────────┘
+  | Image | Base |
+  |-------|------|
+  | `api` | Temurin 21 JRE |
+  | `worker` | `mcr.microsoft.com/playwright/java:v1.63.0-noble` |
+  | `web` | Node 22, Next.js standalone |
+  | nginx | `deploy/nginx/jtyposquatting.conf` |
 
-Benefits:
-- Memory: ~1 KB per thread vs ~1 MB for platform threads
-- Concurrency: 1000+ simultaneous domain checks
-- No thread pool tuning required
-```
-
-### 9.2 Performance Metrics
-
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| **Concurrent Checks** | 100-1000 domains | Virtual threads |
-| **Memory per Thread** | ~1 KB | JVM monitoring |
-| **Response Time** | < 5 seconds per domain | SSE stream |
-| **Screenshot Capture** | < 3 seconds | Headless Chromium (Playwright) |
-
-### 9.3 Bottleneck Analysis
-
-| Component | Bottleneck | Mitigation |
-|-----------|------------|------------|
-| **Network** | DNS resolution, HTTP latency | Parallel checks with virtual threads |
-| **Screenshot** | Chromium startup | Pool of reused browsers, one fresh context per capture |
-| **Memory** | Screenshot storage (BLOB) | Limit screenshot size, compression |
-| **Database** | Concurrent writes | H2 transaction management |
+  The compose file is `deploy/docker-compose.prod.yml`, with three networks:
+  - `edge`: nginx, web, API;
+  - `data`: internal network for the API, workers and MySQL;
+  - `egress`: Internet access for the workers only.
 
 ---
 
-## 10. Deployment Architecture
+## 10. Technology Stack
 
-### 10.1 Deployment Options
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Deployment Architectures                     │
-└─────────────────────────────────────────────────────────────────┘
-
-Option 1: Standalone JAR
-┌─────────────────────────────────────────┐
-│  java -jar JTypoSquatting.jar           │
-│                                         │
-│  ├── Frontend (embedded)                │
-│  ├── Backend (embedded)                 │
-│  └── Database (file-based H2)           │
-└─────────────────────────────────────────┘
-
-Option 2: Native Installer (jpackage)
-┌─────────────────────────────────────────┐
-│  JTypoSquatting.exe / .app / .deb       │
-│                                         │
-│  ├── Bundled JRE                        │
-│  ├── Application JAR                    │
-│  └── Native launcher                    │
-└─────────────────────────────────────────┘
-```
-
-### 10.2 System Requirements
-
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| **Java Version** | JDK 21 | JDK 21+ |
-| **RAM** | 2 GB | 4 GB+ |
-| **Disk Space** | 500 MB | 1 GB+ |
-| **Display** | 1280x720 | 1920x1080+ |
-| **Network** | Internet access | Broadband |
+| Layer | Technologies |
+|-------|-------------|
+| Frontend | Next.js 16.4, React 19.3, TypeScript 5.9, Tailwind 4, next-intl 4, TanStack Virtual, Playwright Test 1.63 |
+| Backend | Java 21 (virtual threads), Spring Boot 3.5 on Jetty, Spring Security 6.5 (OAuth2 client), Spring Session JDBC |
+| Analysis | Apache HttpClient 5.6, JSoup, Lingua, Guava (`InternetDomainName`), Playwright for Java 1.63 |
+| Data | MySQL 8.4 (production), H2 (desktop, tests), Flyway 11, AWS SDK v2 (S3) |
+| Limits | Bucket4j 8, Guava caches |
+| Operations | Micrometer + Prometheus, Docker, nginx, GitHub Actions (tests, end-to-end tests, images on GHCR) |
+| Desktop | Swing |
+| Build | Gradle 9 (multi-module `shared`, `backend`, `frontend`), npm (`web`) |
 
 ---
 
 ## 11. Architecture Decisions
 
-### 11.1 Key Decisions Log
-
-| ID | Decision | Rationale | Consequences |
-|----|----------|-----------|--------------|
-| **AD-001** | Use Java 21 with Virtual Threads | High concurrency for I/O bound domain checks | Requires JDK 21+, simpler code |
-| **AD-002** | Client-Server with SSE | Real-time updates, clean separation | Two processes to manage |
-| **AD-003** | H2 Embedded Database | No external database setup, portable | Limited to single-user |
-| **AD-004** | ~~JavaFX for Screenshots~~ → headless Chromium (Playwright) | Faithful rendering, no display required, per-request anti-SSRF filtering | Chromium must be installed; superseded JavaFX WebView in plan P1.3 |
-| **AD-005** | Fat JAR distribution | Single file deployment, no installation | Larger file size (32 MB) |
-| **AD-006** | Swing for UI | Mature, stable, no additional dependencies | Less modern look than JavaFX |
-
-### 11.2 Trade-off Analysis
-
-#### Virtual Threads vs Thread Pools
-
-| Aspect | Virtual Threads | Thread Pools |
-|--------|-----------------|--------------|
-| **Memory** | ~1 KB/thread | ~1 MB/thread |
-| **Max Concurrency** | 1000+ | ~100-200 |
-| **Configuration** | None required | Pool sizing needed |
-| **Java Version** | Java 21+ | Java 8+ |
-
-#### Swing vs JavaFX for UI
-
-| Aspect | Swing | JavaFX |
-|--------|-------|--------|
-| **Dependencies** | Built-in | External |
-| **Look & Feel** | Native OS | Customizable |
-| **Learning Curve** | Low | Medium |
-| **Decision** | ✅ Selected | Not selected for UI |
+| ID | Decision | Status | Rationale / consequences |
+|----|----------|--------|--------------------------|
+| AD-001 | Java 21 virtual threads | Active | One virtual thread per checked domain; I/O-bound work |
+| AD-002 | Client-server with SSE | Active | Now one SSE stream per scan, read from the database (resumable) |
+| AD-003 | H2 embedded database | **Superseded by AD-008** | Kept for the desktop app and fast tests |
+| AD-004 | JavaFX WebView for screenshots | **Superseded by AD-010** | Needed a display (Xvfb), not isolatable |
+| AD-005 | All-in-one fat JAR | Active (desktop only) | The web service is delivered as container images |
+| AD-006 | Swing UI | **Superseded by AD-007** for the web service | Still used by the desktop app; its removal is pending a product decision |
+| AD-007 | Next.js frontend, same origin as the API | Active | SEO for public pages, no CORS; SSE goes directly to Spring, not through Next |
+| AD-008 | MySQL 8.4 + Flyway, one migration set per database | Active | Domain keys in punycode with `ascii_bin` collation |
+| AD-009 | Spring as OAuth2 client (BFF), session cookie | Active | `EventSource` cannot send an `Authorization` header |
+| AD-010 | Headless Chromium (Playwright) in isolated workers | Active | Faithful rendering, every page request filtered |
+| AD-011 | `scans` table as job queue, claim by conditional `UPDATE` | Active | Portable (H2/MySQL), no extra broker; a message broker can come later |
+| AD-012 | Content-addressed screenshots on S3-compatible storage | Active | Deduplication, no BLOBs in the database |
+| AD-013 | Separate `api` and `worker` roles from one artifact | Active | Independent scaling; workers expose monitoring only |
+| AD-014 | Static CSP on the frontend | Active | A nonce-based CSP is incompatible with prerendering |
 
 ---
 
-## 12. Appendices
-
-### 12.1 File Structure
+## 12. Source Layout
 
 ```
 JTypoSquatting/
-├── backend/
-│   ├── src/main/java/.../controller/    # REST controllers
-│   ├── src/main/java/.../service/       # Business logic
-│   ├── src/main/java/.../db/            # Database access
-│   └── src/main/resources/
-│       └── application.properties       # Spring config
-├── frontend/
-│   ├── src/main/java/.../ui/            # Swing components
-│   ├── src/main/java/.../client/        # REST client
-│   ├── src/main/java/.../config/        # Configuration
-│   └── src/main/resources/
-│       ├── messages.properties          # i18n (English)
-│       ├── messages_fr.properties       # i18n (French)
-│       └── config.properties            # App config
-├── shared/
-│   └── src/main/java/.../dto/           # Data Transfer Objects
-├── doc/                                 # Documentation
-├── .github/workflows/                   # CI/CD
-└── build.gradle                         # Build configuration
+├── backend/       Spring Boot: API, workers, generators, analysis engine, Dockerfile (api, worker)
+│   └── src/main/resources/db/migration/{mysql,h2}/   Flyway migrations
+├── shared/        DTOs and DomainName
+├── frontend/      Swing client and CombinedLauncher (desktop)
+├── web/           Next.js frontend, Playwright end-to-end tests, Dockerfile
+├── deploy/        Production compose, nginx, Prometheus, Keycloak realm (dev), backup scripts
+├── doc/           Documentation
+└── docker-compose.yml   Development services (MySQL, Keycloak)
 ```
-
-### 12.2 Reference Documents
-
-- [Functional Architecture](FUNCTIONAL_ARCHITECTURE.md)
-- [API Documentation](API.md)
-- [Deployment Guide](DEPLOYMENT.md)
-- [Technical Reference](TECHNICAL_REFERENCE.md)
-
-### 12.3 Revision History
-
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 2.0-alpha1 | March 2025 | Development Team | Initial architecture documentation |
-
----
-
-*End of Document*
