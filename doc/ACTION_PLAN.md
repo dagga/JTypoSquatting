@@ -46,7 +46,7 @@ Browser ─► Reverse proxy (Traefik / nginx, TLS) ─┬─ /        ─► Ne
 - **Tests**: MySQL with Testcontainers (the MySQL compatibility mode of H2 is not faithful).
 - **Driver / migrations**: `com.mysql:mysql-connector-j`, Flyway with the `flyway-mysql` module.
 
-## 4. Status of the previous plan
+## 4. Status of the previous plan (updated for version 2.0)
 
 | Ref. | Action | Status | Note |
 |---|---|---|---|
@@ -57,15 +57,15 @@ Browser ─► Reverse proxy (Traefik / nginx, TLS) ─┬─ /        ─► Ne
 | 3.5 | Lost variants in `KeysValuesSwap` | ✅ Done | `KeysValuesSwapMulti` (`Map<String, List<String>>`) |
 | 4.1 | `DomainStatus` enum | ✅ Done | |
 | 4.2 | Fix `Dash` / `DomainName` | ✅ Done | Validation through `InternetDomainName` |
-| 4.3 | Warning before opening a domain | ⏳ To do | Moved to the web frontend (P3.5) |
-| 4.4 | Isolated tests (WireMock) | 🟡 Partial | WireMock in `PageAnalyzerUnitTest`; to be extended (P2.7) |
-| 5.1 | Remove `json-simple` | 🟡 Partial | No longer used in the code; `lib/json-simple-1.1.1.jar` to be deleted |
-| 5.2 | Dead code `GenerationRequestDTO` | ⏳ To do | To be reused as the body of `POST /api/scans` (P2.2) |
-| 5.3 | Leftover Tomcat properties | ⏳ To do | `application-production.properties` lines 34-35 |
-| 5.4 | `System.out.println` → logger | 🟡 Partial | 5 occurrences left |
-| 5.5 | 17 missing algorithms | ⏳ To do | Kept in Phase 0 |
+| 4.3 | Warning before opening a domain | ✅ Done | Confirmation dialog in the web frontend (P3.5) and in the Swing client |
+| 4.4 | Isolated tests (WireMock) | ✅ Done | No test needs the Internet by default; WireMock, S3Mock and Testcontainers (P2.7) |
+| 5.1 | Remove `json-simple` | ✅ Done | Jar deleted (P0.1) |
+| 5.2 | Dead code `GenerationRequestDTO` | ✅ Done | Body of `POST /api/scans` (P2.2) |
+| 5.3 | Leftover Tomcat properties | ✅ Done | Replaced by their Jetty equivalents (P0.1) |
+| 5.4 | `System.out.println` → logger | 🟡 Partial | Backend and shared code done (P0.1); one `System.err` left in the Swing `PreviewPanel` |
+| 5.5 | 17 missing algorithms | ✅ Done | The 21 declared algorithms are implemented (P0.2) |
 
-## 4bis. Progress (2026-10-14, branch `feature/web-public`)
+## 4bis. Progress (2026-10-15, version 2.0)
 
 | Action | Status | Notes |
 |---|---|---|
@@ -93,13 +93,18 @@ Browser ─► Reverse proxy (Traefik / nginx, TLS) ─┬─ /        ─► Ne
 | P3.6 End-to-end tests | ✅ | Playwright with a simulated backend, in CI |
 | P3.7 Removal of Swing | ⏸️ | **Not done**: product decision (removal of the desktop application and its installers) to be validated |
 | P4.1 Containers, reverse proxy | 🟡 | Images, nginx and compose validated with Podman. Remaining: TLS, host firewall rules for the workers' network |
-| P4.2 CI/CD | 🟡 | Tests, and images published to GHCR; deployment to be scripted for the hosting |
+| P4.2 CI/CD | 🟡 | Backend tests, frontend checks and end-to-end tests, images published to GHCR from `master` and from tags; CI fixed (runner JDK instead of the developer JDK of `gradle.properties`, Next.js route types generated before `tsc`). Deployment to be scripted for the hosting |
 | P4.3 Observability | ✅ | Prometheus, JSON logs, alert rules; collector and Prometheus to be deployed |
 | P4.4 Backups, retention | ✅ | Scripts tested; scheduling to be set up on the host |
 | P4.5 Compliance | 🟡 | Account export and deletion done; `doc/COMPLIANCE.md` and legal texts to be validated by the legal team |
 
 Go-live criteria (§ 10): covered technically, except the legal texts (legal team), actual monitoring
 (Prometheus deployment) and scheduled backups on the host.
+
+**Version 2.0** (tag `v2.0`) delivers phases 0 to 4 above, merged through pull request #1. The whole
+documentation is updated to the code and written in English, like the code comments and the commit
+history. Next steps: P0.3 (new algorithms), P3.7 (decision on Swing), and the operational items left in
+P1.5, P4.1, P4.2 and P4.5.
 
 ## 5. Phase 0 — Finish the cleanup
 
@@ -369,5 +374,5 @@ Go-live criteria (§ 10): covered technically, except the legal texts (legal tea
 
 ---
 
-**Revision:** 2026-10-14
+**Revision:** 2026-10-15 (version 2.0)
 **Owner:** [Name]
