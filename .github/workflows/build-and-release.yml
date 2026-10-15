@@ -2,6 +2,8 @@
 # Builds and publishes the executable JAR on releases
 #
 # Note: screenshots use headless Chromium (Playwright), no display is required.
+# gradle.properties may point org.gradle.java.home to a developer JDK: every Gradle call
+# below uses the JDK installed by actions/setup-java instead.
 
 name: Build and Release
 
@@ -36,11 +38,11 @@ jobs:
       run: chmod +x gradlew
 
     - name: Install headless Chromium and its system dependencies
-      run: ./gradlew :backend:installPlaywrightBrowsers -PwithDeps --no-daemon
+      run: ./gradlew :backend:installPlaywrightBrowsers -PwithDeps --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
     # Testcontainers (MySQL, S3Mock) use the Docker engine of the runner
     - name: Run tests
-      run: ./gradlew test --no-daemon --info --stacktrace
+      run: ./gradlew test --no-daemon -Dorg.gradle.java.home="$JAVA_HOME" --info --stacktrace
 
     - name: Upload test reports
       if: always()
@@ -111,10 +113,10 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build with Gradle
-      run: ./gradlew clean build -x test --no-daemon
+      run: ./gradlew clean build -x test --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
     - name: Build optimized fat JAR
-      run: ./gradlew :frontend:fatJar --no-daemon
+      run: ./gradlew :frontend:fatJar --no-daemon -Dorg.gradle.java.home="$JAVA_HOME"
 
     - name: Get version from gradle.properties
       id: version
