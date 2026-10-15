@@ -17,14 +17,15 @@ const FLUSH_MS = 250;
 
 export function ScanView({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  return <AuthGate>{() => <LiveScan id={id} />}</AuthGate>;
+  // key: a new scan starts from an empty state
+  return <AuthGate>{() => <LiveScan key={id} id={id} />}</AuthGate>;
 }
 
 function LiveScan({ id }: { id: string }) {
   const t = useTranslations();
   const [scan, setScan] = useState<Scan | null>(null);
   const [results, setResults] = useState<ScanResult[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<"forbidden" | "notFound" | "generic" | null>(null);
   const [streamLost, setStreamLost] = useState(false);
   const [filter, setFilter] = useState("");
   const [onlyOnline, setOnlyOnline] = useState(false);
@@ -32,6 +33,9 @@ function LiveScan({ id }: { id: string }) {
   const pending = useRef<ScanResult[]>([]);
 
   useEffect(() => {
+    // The stream is opened once the scan is loaded, possibly after the cleanup has run
+    // (unmount, or the double mount of React StrictMode): it must then not be opened at all
+    let cancelled = false;
     let closeStream: (() => void) | undefined;
     const seen = new Set<number>();
     const flush = () => {
@@ -44,6 +48,7 @@ function LiveScan({ id }: { id: string }) {
 
     getScan(id)
       .then((loaded) => {
+        if (cancelled) return;
         setScan(loaded);
         closeStream = followScan(id, {
           onResult: (result) => {
@@ -62,16 +67,19 @@ function LiveScan({ id }: { id: string }) {
         });
       })
       .catch((e) => {
-        if (e instanceof ApiError && e.status === 403) setError(t("App.errors.forbidden"));
-        else if (e instanceof ApiError && e.status === 404) setError(t("App.errors.notFound"));
-        else setError(t("App.errors.generic"));
+        if (cancelled) return;
+        if (e instanceof ApiError && e.status === 403) setError("forbidden");
+        else if (e instanceof ApiError && e.status === 404) setError("notFound");
+        else setError("generic");
       });
 
     return () => {
+      cancelled = true;
       clearInterval(timer);
       closeStream?.();
+      pending.current = [];
     };
-  }, [id, t]);
+  }, [id]);
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -88,7 +96,7 @@ function LiveScan({ id }: { id: string }) {
   if (error) {
     return (
       <p role="alert" className="text-red-700 dark:text-red-300">
-        {error}
+        {t(`App.errors.${error}`)}
       </p>
     );
   }
