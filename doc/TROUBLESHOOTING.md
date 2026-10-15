@@ -1,6 +1,6 @@
 # JTypoSquatting — Troubleshooting
 
-**Version:** 2.0-alpha1
+**Version:** 2.0
 
 Known problems of the web service, the desktop application and the development environment, with their
 causes and fixes.

@@ -4,10 +4,39 @@
 **Version audited:** 2.0-alpha1  
 **Audit date:** September 2026  
 **Scope:** `backend`, `frontend`, `shared` modules, Gradle configuration and run scripts  
-**Status:** Improvement recommendations and remediation plan  
+**Status:** Improvement recommendations and remediation plan; resolution status for version 2.0 below  
 
-> **Historical document.** This audit covers the original desktop application. Most findings are fixed:
-> see the progress in [ACTION_PLAN.md](ACTION_PLAN.md) (§ 4 and § 4bis).
+> **Historical document.** This audit covers the original desktop application (2.0-alpha1). The findings
+> below are kept as written; their resolution in version 2.0 is summarised in this table. See also the
+> progress in [ACTION_PLAN.md](ACTION_PLAN.md) (§ 4 and § 4bis).
+
+### Resolution status (version 2.0, 2026-10-15)
+
+| Finding | Status | Resolution |
+|---|---|---|
+| SEC-01 TLS verification disabled | ✅ Fixed | Permissive `TrustManager` and `HostnameVerifier` removed; an invalid certificate is reported as a `TlsStatus` signal (P1.4) |
+| SEC-02 Malicious domains opened in the browser | ✅ Fixed | Confirmation dialog before opening a site, in the web frontend (P3.5) and in the Swing client; screenshot offered instead |
+| SEC-03 Destructive endpoints without access control | ✅ Fixed | OpenID Connect login on the web; the legacy endpoints exist only in local mode, on 127.0.0.1 (P1.1, P2.3) |
+| SEC-04 Wildcard CORS | ✅ Fixed | CORS removed: frontend and API share the same origin (P1.6) |
+| CONC-01 Single shared JDBC connection | ✅ Fixed | `JdbcTemplate` on a HikariCP pool |
+| CONC-02 Unsynchronised `SseEmitter` | ✅ Fixed | Synchronised sends; scan streams are written by a single thread (P2.3) |
+| CONC-03 Unsynchronised collections in the Swing client | ✅ Fixed | `ConcurrentHashMap` in `DomainStreamingService` |
+| CONC-04 Race on `TLD_LIST` | ✅ Fixed | Synchronised snapshot and reload |
+| CONC-05 JavaFX thread blocked by `sleep()` | ✅ Fixed | JavaFX replaced by headless Chromium (P1.3) |
+| BUG-01 `LogTailer` closed at startup | ✅ Fixed | Executor no longer closed by try-with-resources |
+| BUG-02 Inconsistent status labels, counters at zero | ✅ Fixed | `DomainStatus` enum |
+| BUG-03 Lost spelling variants | ✅ Fixed | `KeysValuesSwapMulti` keeps every variant |
+| BUG-04 Domain names starting with a dot | ✅ Fixed | `Dash` rewritten; generated names validated |
+| BUG-05 Faulty validation in `DomainName` | ✅ Fixed | Validation through Guava `InternetDomainName` |
+| BUG-06 `ConfigManager.setLocale()` without effect | ✅ Fixed | The resource bundle is reloaded for the new locale |
+| BUG-07 `NullPointerException` in `ClientConfig` | ✅ Fixed | Missing `client.properties` handled, default URL used |
+| DEBT-01 17 announced algorithms not implemented | ✅ Fixed | The 21 declared algorithms are implemented (P0.2); new ones planned (P0.3) |
+| DEBT-02 Dead code, unused DTOs | ✅ Fixed | `GenerationRequestDTO` is the body of `POST /api/scans` |
+| DEBT-03 Redundant JSON libraries | 🟡 Partial | `json-simple` removed; Gson (generators, repositories) and Jackson (Spring) still coexist |
+| DEBT-04 Phantom Tomcat parameters | ✅ Fixed | Replaced by their Jetty equivalents (P0.1) |
+| DEBT-05 `System.out` / `System.err` logging | 🟡 Partial | SLF4J everywhere in the backend and shared code; one `System.err` left in the Swing `PreviewPanel` |
+| TEST-01 No tests in `frontend` and `shared` | ✅ Fixed | Tests added for both modules |
+| TEST-02 Unit tests depending on the network | ✅ Fixed | WireMock, S3Mock and Testcontainers; network tests opt-in (`-Dinclude.network=true`) (P2.7) |
 
 ---
 

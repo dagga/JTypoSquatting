@@ -121,7 +121,7 @@ jobs:
     - name: Get version from gradle.properties
       id: version
       run: |
-        VERSION=$(grep "^version=" gradle.properties 2>/dev/null | cut -d'=' -f2 || echo "2.0-alpha1")
+        VERSION=$(grep "^version=" gradle.properties 2>/dev/null | cut -d'=' -f2 || echo "2.0")
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Using version: $VERSION"
 
@@ -195,6 +195,7 @@ jobs:
         images: ghcr.io/${{ github.repository_owner }}/jtyposquatting-${{ matrix.name }}
         tags: |
           type=ref,event=branch
+          type=ref,event=tag
           type=semver,pattern={{version}}
           type=sha
 

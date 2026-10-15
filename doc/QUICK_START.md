@@ -1,6 +1,6 @@
 # JTypoSquatting — Quick Start
 
-**Version:** 2.0-alpha1
+**Version:** 2.0
 
 JTypoSquatting comes in two forms:
 

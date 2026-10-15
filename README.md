@@ -6,7 +6,7 @@ It is meant for security analysts, brand protection and legal teams.
 
 ![Results of a scan](https://github.com/hernic/JTypoSquatting/assets/4397039/874a5ff7-68d5-4d8b-9a60-a4dddde188f9)
 
-Version **2.0-alpha1**. It comes in two forms:
+Version **2.0**. It comes in two forms:
 
 | | Web service | Desktop application |
 |---|---|---|
