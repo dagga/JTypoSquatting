@@ -1,256 +1,206 @@
-# JTypoSquatting v2.0_alpha1
+# JTypoSquatting
 
-Typo squatting domain detection tool for security analysts and brand protection professionals.
+**Find the domains that imitate yours.** JTypoSquatting generates the typo variants of a domain name
+(typos, look-alike characters, other extensions…), checks which ones are online, and shows what they host.
+It is meant for security analysts, brand protection and legal teams.
 
-![TypoSquatting Example](https://github.com/hernic/JTypoSquatting/assets/4397039/874a5ff7-68d5-4d8b-9a60-a4dddde188f9)
+![Results of a scan](https://github.com/hernic/JTypoSquatting/assets/4397039/874a5ff7-68d5-4d8b-9a60-a4dddde188f9)
 
-## ⚠️ Architecture : Application tout-en-un
+Version **2.0-alpha1**. It comes in two forms:
 
-JTypoSquatting est désormais une application **tout-en-un** (backend Spring Boot + frontend Swing). Les deux composants démarrent automatiquement lors du lancement du JAR.
-
-## Démarrage rapide
-
-```bash
-# Lancement de l'application (backend + frontend)
-java -jar JTypoSquatting.jar
-```
-
-**Prérequis :** Java 21+ | [Guide de démarrage complet](doc/QUICK_START.md)
-
+| | Web service | Desktop application |
+|---|---|---|
+| Users | Several, with accounts (OpenID Connect) | One, on their own machine |
+| Interface | Browser (Next.js, French / English) | Swing window |
+| Storage | MySQL + S3-compatible storage | In memory (H2) |
+| Run with | Containers (`deploy/`) | `java -jar JTypoSquatting.jar` |
 
 ---
 
-## What It Does
+## How it works
 
-JTypoSquatting generates potential typo squatted domains from a target domain and checks their status in real-time:
+1. **Generate**: 21 algorithms turn `example.com` into thousands of candidates.
+2. **Check**: each candidate is contacted.
+   - HTTP response and TLS certificate (a self-signed or expired certificate is reported as a signal).
+   - Page title, description and language (12 languages detected).
+   - Screenshot taken in an isolated headless Chromium.
+3. **Analyse**: results arrive live. Filter them, open the details, and export them as CSV or JSON.
 
-1. **Generate** typo variants using 21 algorithms (keyboard, homoglyph, misspelling, TLD...)
-2. **Check** each domain's HTTP status and capture screenshots
-3. **Display** results with live updates and metrics
-4. **Export** results for further analysis
+| Family | Algorithms | Example |
+|--------|-----------|---------|
+| Characters | omission, repetition, changeOrder, addition, vowelSwap | `example.com` → `exmple.com`, `exmaple.com` |
+| Keyboard | replacement, doubleReplacement (QWERTY and AZERTY) | `example.com` → `wxample.com`, `google.com` → `gppgle.com` |
+| Dots and dashes | addDash, stripDash, missingDot, subdomain, changeDotDash | `example.com` → `ex-ample.com`, `ex.ample.com` |
+| Look-alike characters | homoglyph | `example.com` → `ехаmple.com` (Cyrillic) |
+| Words | commonMisspelling, homophones, singularPluralize, numeralSwap | `fourseasons.com` → `forseasons.com`, `shop4you.com` → `shopforyou.com` |
+| Extensions | wrongTld, addTld, wrongSld, addDynamicDns | `example.com` → `example.fr`, `example.com.br`, `example.duckdns.org` |
 
-![Screenshot](https://github.com/hernic/JTypoSquatting/assets/4397039/042a2ebf-2b8f-4950-b70f-e4e1717579c7)
+Details: [Technical reference](doc/TECHNICAL_REFERENCE.md#25-algorithm-registry).
+
+### 🚧 Algorithms still to develop
+
+The 21 algorithms above are all implemented. Reference tools such as
+[dnstwist](https://github.com/elceef/dnstwist) and [URLCrazy](https://github.com/urbanadventurer/urlcrazy)
+cover other techniques that JTypoSquatting does not generate yet:
+
+| Algorithm | Status | What it generates | Example |
+|-----------|--------|-------------------|---------|
+| **Combosquatting** (dictionary) | ⏳ To do | The brand combined with words used in phishing (login, secure, support, account, pay…). These are the most common phishing domains today. | `example.com` → `example-login.com`, `secure-example.com` |
+| **Insertion** | ⏳ To do | A neighbouring key typed inside the label. `addition` only appends a character at the end. | `example.com` → `exsample.com` |
+| **Bitsquatting** | ⏳ To do | One bit flipped in a character (memory or transmission errors). | `example.com` → `dxample.com`, `uxample.com` |
+| **Whole-label homoglyphs** | ⏳ To do | All look-alike letters replaced at once, for example the whole label in Cyrillic. `homoglyph` replaces one character at a time. | `example.com` → `ехаmрlе.com` |
+| **Extension inside the label** | ⏳ To do | The extension glued to the label, then another extension. | `example.com` → `examplecom.net`, `example-com.com` |
+
+To add one, write a generator in `backend/src/main/java/com/aleph/graymatter/jtyposquatting/generator/`,
+then declare it in the `Algorithm` enum: `NewAlgorithmsTest` checks that every declared algorithm generates
+variants. Keep the cap on generated domains in mind (`jtypo.quota.max-domains-per-scan`, 3000 by default):
+dictionary-based algorithms produce many candidates.
+
+---
+
+## Quick start
+
+**Requirements**:
+- Java 21+.
+- For the web service: Node.js 22, plus Docker or Podman for Keycloak and MySQL.
+
+### Web service, for local development
+
+```bash
+# 1. Identity provider (Keycloak on :8180, user alice / alice)
+docker compose up -d keycloak
+
+# 2. Headless Chromium for screenshots (once)
+./gradlew :backend:installPlaywrightBrowsers
+
+# 3. Backend: API and worker in one process on :8081, in-memory database
+FORWARD_HEADERS_STRATEGY=framework ./gradlew :backend:bootRun
+
+# 4. Frontend on http://localhost:3000 (/api and login are forwarded to the backend)
+cd web && npm install && npm run dev
+```
+
+Log in with `alice` / `alice`, then start a scan from **My scans**. To use MySQL instead of the in-memory
+database, run `docker compose up -d mysql` and start the backend with
+`DB_URL=jdbc:mysql://localhost:3306/jtypo DB_USER=jtypo DB_PASSWORD=jtypo-dev`.
+
+### Desktop application
+
+```bash
+./gradlew :frontend:fatJar :backend:installPlaywrightBrowsers
+java -jar frontend/build/libs/JTypoSquatting.jar
+```
+
+The JAR starts the backend in *local* mode and opens the Swing window. In local mode the API listens on
+127.0.0.1 only and needs no login. Guide: [Quick start](doc/QUICK_START.md).
+
+---
+
+## Architecture of the web service
+
+```
+Browser ──► nginx ─┬─ /          ─► Next.js (public pages + application)
+                   └─ /api, login ─► API (Spring Boot) ──┬─► MySQL (scans, results, sessions)
+                                                          ├─► S3 storage (screenshots)
+                                                          └─► OpenID Connect provider
+                     Workers (Spring Boot + Chromium) ◄── scan queue in MySQL
+                     isolated network, Internet egress only
+```
+
+- **API instances** serve the REST API and the live results (Server-Sent Events). They hold no state:
+  sessions are kept in MySQL.
+- **Workers** claim queued scans and send a heartbeat while they work. If a worker dies, another one
+  resumes its scans without checking the same domains again.
+- A cache shared between users avoids checking the same domain twice within 24 hours.
+
+### Security
+
+| Area | Measures |
+|---|---|
+| Login | OpenID Connect with PKCE, session in an httpOnly cookie, CSRF token, strict security headers |
+| Isolation between users | Each user only sees their own scans, results and screenshots |
+| Scanned sites | Never reach internal addresses (DNS pinning, redirects checked again), strict TLS validation |
+| Screenshots | Hostile pages open in a fresh Chromium context, inside unprivileged containers |
+| Abuse | Rate limiting, per-user quotas, cap on outbound checks |
+
+### Operations
+
+- Prometheus metrics, JSON logs and alert rules.
+- Nightly purge: scans after 90 days, cached checks after 30 days, screenshots that are no longer used.
+- Backup and restore scripts for MySQL.
+- GDPR: users can export their data and delete their account.
+
+---
+
+## Project structure
+
+```
+JTypoSquatting/
+├── backend/     Spring Boot: REST API, scan workers, generators, analysis engine, Dockerfile
+├── shared/      DTOs and domain name model shared with the desktop client
+├── frontend/    Swing desktop client (and the all-in-one JAR)
+├── web/         Next.js frontend of the web service, Playwright end-to-end tests, Dockerfile
+├── deploy/      Production compose, nginx, Prometheus, Keycloak realm, backup scripts
+└── doc/         Documentation
+```
+
+---
+
+## Tests
+
+```bash
+./gradlew test                          # Backend: unit, Spring and Testcontainers tests (MySQL, S3)
+./gradlew test -Dinclude.network=true   # Also the tests that contact real websites
+
+cd web
+npm run lint && npm run typecheck
+npm run test:e2e                        # Playwright on a production build, simulated backend
+```
+
+The Testcontainers tests need Docker or Podman and are skipped otherwise. With rootless Podman, set
+`DOCKER_HOST=unix:///run/user/$UID/podman/podman.sock` and `TESTCONTAINERS_RYUK_DISABLED=true`.
+
+GitHub Actions runs:
+- the backend tests;
+- the frontend checks and end-to-end tests;
+- the builds of the `api`, `worker` and `web` images, which are published to GHCR outside pull requests.
+
+---
+
+## Deployment
+
+```bash
+cp deploy/.env.example deploy/.env    # database, S3, OpenID Connect, public URL
+docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env up -d --build
+```
+
+Before going live, also take care of the following:
+- TLS in front of nginx;
+- firewall rules for the workers' network;
+- scheduled backups;
+- the legal texts.
+
+See the [deployment guide](doc/DEPLOYMENT.md#5bis-web-service-deployment-api-and-workers) and
+[compliance](doc/CONFORMITE.md).
 
 ---
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| **[Quick Start](doc/QUICK_START.md)** | Get running in 5 minutes |
-| **[Deployment Guide](doc/DEPLOYMENT.md)** | Installation, configuration, CI/CD |
-| **[API Documentation](doc/API.md)** | REST API reference |
-| **[Troubleshooting](doc/TROUBLESHOOTING.md)** | Common issues and solutions |
-| **[Architecture](doc/ARCHITECTURE.md)** | Software architecture |
-| **[Functional Architecture](doc/FUNCTIONAL_ARCHITECTURE.md)** | Business functions |
-| **[Technical Reference](doc/TECHNICAL_REFERENCE.md)** | Algorithms, mappings, class reference |
-
----
-
-## Features
-
-### Core
-- ✅ Real-time domain checking with SSE streaming
-- ✅ Screenshot capture for active domains
-- ✅ Language detection (75+ languages)
-- ✅ HTTP status and metadata extraction
-- ✅ Local H2 database for persistence
-
-### UI/UX
-- ✅ Swing-based desktop application
-- ✅ Live metrics (Generated, HTTP up, Inaccessible)
-- ✅ Screenshot preview panel
-- ✅ Log viewer (backend/frontend)
-- ✅ Multi-language support (EN/FR)
-
-### Web Frontend (Next.js)
-
-The public web service has a Next.js 16 frontend in `web/` (French and English).
-
-```bash
-cd web
-npm install
-npm run dev            # http://localhost:3000, /api and login are forwarded to the backend on :8081
-npm run lint && npm run typecheck
-npm run test:e2e       # Playwright, production build, simulated backend
-```
-
-Run the backend in web mode for local development (Keycloak and MySQL from `docker-compose.yml`), with
-`FORWARD_HEADERS_STRATEGY=framework` so that login redirects come back to port 3000.
-
----
-
-## Testing & CI/CD
-- ✅ JUnit 5 unit and functional tests
-- ✅ Integration tests with Spring Boot
-- ✅ GitHub Actions CI/CD pipeline
-- ✅ Headless Chromium (Playwright) for screenshot testing, no display required
-- ✅ Smart test modes (CI-strict / local-tolerant)
-
-### Performance
-- ✅ Virtual Threads (Java 21+) for high concurrency
-- ✅ Optimized JAR size (32 MB vs 108 MB)
-- ✅ Batch processing with configurable delays
-
----
-
-## Algorithms
-
-| Family | Algorithms | Example |
-|--------|-----------|---------|
-| **Characters** | omission, repetition, changeOrder, addition, vowelSwap | `example.com` → `exmple.com`, `exmaple.com` |
-| **Keyboard** | replacement, doubleReplacement (QWERTY + AZERTY) | `example.com` → `wxample.com`, `google.com` → `gppgle.com` |
-| **Dash / dot** | addDash, stripDash, missingDot, subdomain, changeDotDash | `example.com` → `ex-ample.com`, `ex.ample.com` |
-| **Visual** | homoglyph | `example` → `ехаmple` (Cyrillic) |
-| **Words** | commonMisspelling, homophones, singularPluralize, numeralSwap | `absence` → `absense`, `shop4you` → `shopforyou` |
-| **Suffix** | wrongTld, addTld, wrongSld, addDynamicDns | `example.com` → `example.fr`, `example.com.br`, `example.duckdns.org` |
-
-**Complete reference:** [Technical Reference - Algorithms](doc/TECHNICAL_REFERENCE.md#2-domain-generation-algorithms)
-
----
-
-## Build Commands
-
-```bash
-# Full build
-./gradlew clean build
-
-# Optimized fat JAR (32 MB)
-./gradlew :frontend:fatJar
-
-# Copy JAR to root
-./gradlew :frontend:copyFatJar
-
-# Run tests
-./gradlew test
-
-# Install headless Chromium once (required for screenshots)
-./gradlew :backend:installPlaywrightBrowsers
-
-# Native installer (requires jpackage)
-./gradlew :frontend:packageApp
-```
-
-**Full build guide:** [Deployment - Building](doc/DEPLOYMENT.md#3-building-from-source)
-
----
-
-## Testing
-
-JTypoSquatting includes comprehensive test coverage:
-
-### Test Types
-
-| Type | Description | Command |
-|------|-------------|---------|
-| **Unit Tests** | PageAnalyzer logic | `./gradlew :backend:test --tests "PageAnalyzerUnitTest"` |
-| **Functional Tests** | Real domain analysis | `./gradlew :backend:test --tests "PageAnalyzerFunctionalTest"` |
-| **Integration Tests** | Spring Boot + DB | `./gradlew :backend:test --tests "PageAnalyzerIntegrationTest"` |
-
-### Test Modes
-
-- **CI Mode (GitHub Actions)**: Screenshots required (Chromium installed by the workflow)
-- **Local Mode**: Screenshots optional (tests pass when Chromium is not installed)
-
-### Running Tests
-
-```bash
-# Default (tolerant mode)
-./gradlew test
-
-# With screenshots (installs headless Chromium once)
-./gradlew :backend:installPlaywrightBrowsers
-./gradlew test
-```
-
-**Full testing guide:** [Deployment - Testing](doc/DEPLOYMENT.md#75-running-tests-locally) | [Troubleshooting - Testing](doc/TROUBLESHOOTING.md#5-testing-issues)
-
----
-
-## Configuration
-
-### Quick Settings
-
-| Setting | Default | File |
-|---------|---------|------|
-| API URL | `http://localhost:8080` | `client.properties` |
-| Window Size | 1200x800 | `config.properties` |
-| Max Parallel Checks | 10 | `config.properties` |
-
-**Full configuration:** [Deployment - Configuration](doc/DEPLOYMENT.md#5-configuration)
-
-### Virtual Threads (Java 21+)
-
-```properties
-# application.properties
-spring.threads.virtual.enabled=true
-spring.task.execution.pool.max-size=128
-```
-
-**Benefits:** 1000+ concurrent domain checks, ~1KB memory per thread
-
-**Details:** [Architecture - Virtual Threads](doc/ARCHITECTURE.md#9-performance-architecture)
-
----
-
-## Project Structure
-
-```
-JTypoSquatting/
-├── backend/          # Spring Boot REST API + Virtual Threads
-├── frontend/         # Swing UI + SSE client
-├── shared/           # Domain generation + DTOs
-├── doc/              # Complete documentation
-├── .github/workflows # CI/CD pipeline
-└── scripts/          # Utility scripts
-```
-
-**Architecture details:** [Architecture - Components](doc/ARCHITECTURE.md#4-system-components)
-
----
-
-## CI/CD
-
-GitHub Actions automatically:
-- Builds on push/PR
-- Creates optimized JAR
-- Publishes releases on tag
-
-**Create a release:**
-```bash
-git tag v2.0-alpha1
-git push origin v2.0-alpha1
-```
-
-**Workflow:** [.github/workflows/build-and-release.yml](.github/workflows/build-and-release.yml)
-
----
-
-## Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| Cannot connect to API | Start backend: `./gradlew :backend:bootRun` |
-| Java version error | Install JDK 21+: `sudo apt install openjdk-21-jdk` |
-| No screenshots | Check backend logs: `tail -f /tmp/jtypo-backend.log` |
-
-**Full troubleshooting:** [TROUBLESHOOTING.md](doc/TROUBLESHOOTING.md)
-
----
-
-## Version History
-
-| Version | Date | Highlights |
-|---------|------|------------|
-| **2.0_alpha1** | 2025 | Virtual Threads, i18n, optimized JAR, Swing UI |
-| **1.0** | - | Original version |
+| Document | Content |
+|----------|---------|
+| [Quick start](doc/QUICK_START.md) | Desktop application in a few minutes |
+| [Deployment](doc/DEPLOYMENT.md) | Building, configuration, containers, monitoring, backups |
+| [API](doc/API.md) | Authentication, scans, live results, quotas, screenshots |
+| [Technical reference](doc/TECHNICAL_REFERENCE.md) | Algorithms, mappings, classes |
+| [Architecture](doc/ARCHITECTURE.md) | Software architecture |
+| [Troubleshooting](doc/TROUBLESHOOTING.md) | Common issues |
+| [Compliance](doc/CONFORMITE.md) | GDPR register, retention, users' rights, abuse handling (draft, in French) |
+| [Action plan](doc/plan-action.md) | Roadmap towards the public web service and its progress (in French) |
+| [Audit](doc/audit.md) | Code audit behind the action plan (in French) |
 
 ---
 
 ## License
 
-See [LICENSE](LICENSE) file.
-
----
-
-**Questions?** Check the [Troubleshooting Guide](doc/TROUBLESHOOTING.md) or create an issue on GitHub.
+Public domain ([The Unlicense](LICENSE)).
