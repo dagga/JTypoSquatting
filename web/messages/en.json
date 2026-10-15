@@ -39,7 +39,7 @@
       "keyboard": "Keyboard",
       "keyboardText": "Neighbouring keys on QWERTY and AZERTY keyboards: wxample.com, gppgle.com.",
       "visual": "Homoglyphs",
-      "visualText": "Look-alike characters from other alphabets: ехаmple.com (Cyrillic).",
+      "visualText": "Look-alike characters: accented letters, digits and letter pairs (éxample.com, examp1e.com, exarnple.com).",
       "separators": "Dots and hyphens",
       "separatorsText": "Hyphens added or removed, dots missing or added: ex-ample.com, wwwexample.com, ex.ample.com.",
       "words": "Words",
@@ -57,7 +57,7 @@
     "q2": "How many scans can I run?",
     "a2": "Two simultaneous scans and fifty per 24-hour period, to keep the service fair.",
     "q3": "Why do some domains show strange characters?",
-    "a3": "They are homoglyphs: characters from other alphabets that look identical. The technical form (punycode, xn--…) is shown as well.",
+    "a3": "They are homoglyphs: characters that look alike (é and e, 1 and l, rn and m). The technical form (punycode, xn--…) is also shown for internationalised domains.",
     "q4": "What does an \"untrusted\" certificate mean?",
     "a4": "The site presents a self-signed or expired certificate, or one issued for another name. This is common on fraudulent domains."
   },

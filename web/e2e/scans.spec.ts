@@ -109,24 +109,32 @@ test("annuler une analyse en cours envoie DELETE", async ({ page }) => {
   expect(requests.some((r) => r.method === "DELETE" && r.url === "/api/scans/scan-1")).toBe(true);
 });
 
-test("5000 résultats restent fluides : seules les lignes visibles sont rendues", async ({ page }) => {
-  const many = Array.from({ length: 5000 }, (_, i) => result(i + 1, `variant-${i + 1}.com`));
+test("50 000 résultats (limite par analyse) restent fluides : seules les lignes visibles sont rendues", async ({ page }) => {
+  test.setTimeout(120_000);
+  const many = Array.from({ length: 50_000 }, (_, i) => result(i + 1, `variant-${i + 1}.com`));
   await mockBackend(page, {
-    scans: [scan({ totalDomains: 5000 })],
+    scans: [scan({ totalDomains: 50_000 })],
     events: {
       "scan-1": sse([
         ...many.map((r) => ({ event: "result", id: r.id, data: r })),
-        { event: "end", data: scan({ status: "COMPLETED", totalDomains: 5000, checkedDomains: 5000 }) },
+        { event: "end", data: scan({ status: "COMPLETED", totalDomains: 50_000, checkedDomains: 50_000 }) },
       ]),
     },
   });
   await page.goto("/fr/app/scans/scan-1");
 
-  await expect(page.getByTestId("counter-Vérifiés")).toHaveText("5000");
+  await expect(page.getByTestId("counter-Vérifiés")).toHaveText("50000", { timeout: 30_000 });
   expect(await page.getByRole("row").count()).toBeLessThan(80);
 
   await page.getByTestId("results-scroll").evaluate((el) => el.scrollTo(0, el.scrollHeight));
-  await expect(page.getByRole("row").filter({ hasText: "variant-5000.com" })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "variant-50000.com" })).toBeVisible();
+
+  // Le filtre reste réactif sur 50 000 lignes
+  const start = Date.now();
+  await page.getByLabel("Filtrer").fill("variant-4999");
+  // variant-4999 et variant-49990 à 49999, plus la ligne d'en-tête
+  await expect(page.getByRole("row")).toHaveCount(12);
+  expect(Date.now() - start).toBeLessThan(3000);
 });
 
 test("une analyse d'un autre utilisateur affiche une erreur", async ({ page }) => {

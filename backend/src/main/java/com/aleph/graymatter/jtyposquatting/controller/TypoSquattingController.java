@@ -48,7 +48,7 @@ public class TypoSquattingController {
     private final int maxDomainsPerScan;
 
     public TypoSquattingController(DomainCheckService domainCheckService, DatabaseService databaseService,
-                                   @Value("${jtypo.quota.max-domains-per-scan:3000}") int maxDomainsPerScan) {
+                                   @Value("${jtypo.quota.max-domains-per-scan:50000}") int maxDomainsPerScan) {
         this.domainCheckService = domainCheckService;
         this.databaseService = databaseService;
         this.maxDomainsPerScan = maxDomainsPerScan;
