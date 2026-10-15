@@ -20,8 +20,8 @@ import static org.mockito.Mockito.when;
  * Integration tests for PageAnalyzer service.
  * Tests real domain analysis including screenshot capture.
  *
- * <p>Ces tests requièrent un accès réseau (la capture d'écran est simulée).
- * Ils sont marqués {@code @Tag("network")} et ne sont lancés que sur demande :
+ * <p>These tests need network access (the screenshot is simulated). They are tagged
+ * {@code @Tag("network")} and only run on demand:
  * {@code ./gradlew test -Dinclude.network=true}
  */
 @Tag("network")

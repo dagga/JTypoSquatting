@@ -26,8 +26,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
- * Traitement des analyses par le worker : exécution complète, annulation, reprise après la panne d'un worker.
- * Les vérifications réseau sont simulées.
+ * Scan processing by the worker: complete run, cancellation, takeover after a worker failure.
+ * Network checks are simulated.
  */
 @SpringBootTest(properties = {
         "jtypo.worker.enabled=true",
@@ -79,14 +79,14 @@ class ScanWorkerTest {
     }
 
     @Test
-    @DisplayName("Une analyse est traitée jusqu'au bout, chaque domaine une seule fois")
+    @DisplayName("A scan is processed to the end, each domain once")
     void testScanCompletes() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("worker-user", "w", null), "complete-test.com", false);
 
         await(() -> statusOf(scan.id()) == ScanStatus.COMPLETED, "scan completed");
 
         Scan done = scans.findById(scan.id()).orElseThrow();
-        assertEquals(200, done.totalDomains(), "plafonné par max-domains-per-scan");
+        assertEquals(200, done.totalDomains(), "capped by max-domains-per-scan");
         assertEquals(200, done.checkedDomains());
         List<ScanResult> stored = results.findAfter(scan.id(), 0, 1000);
         assertEquals(200, stored.size());
@@ -98,7 +98,7 @@ class ScanWorkerTest {
     }
 
     @Test
-    @DisplayName("Une analyse annulée s'arrête sans être marquée terminée")
+    @DisplayName("A cancelled scan stops without being marked completed")
     void testCancellation() throws Exception {
         when(domainCheckService.analyze(anyString())).thenAnswer(invocation -> {
             Thread.sleep(200);
@@ -113,15 +113,15 @@ class ScanWorkerTest {
         assertEquals(ScanStatus.CANCELLED, statusOf(scan.id()));
         int checkedAfterCancel = results.countByScan(scan.id());
         Thread.sleep(500);
-        assertEquals(checkedAfterCancel, results.countByScan(scan.id()), "plus aucun résultat après l'annulation");
+        assertEquals(checkedAfterCancel, results.countByScan(scan.id()), "no more results after the cancellation");
         assertTrue(checkedAfterCancel < 200);
     }
 
     @Test
-    @DisplayName("Une analyse abandonnée par un worker en panne est reprise sans revérifier les domaines déjà faits")
+    @DisplayName("A scan abandoned by a failed worker is taken over without checking the done domains again")
     void testTakeoverOfStaleScan() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("takeover-user", "t", null), "takeover-test.net", false);
-        // Simule un worker mort : analyse RUNNING, battement de cœur ancien, un résultat déjà enregistré
+        // Simulates a dead worker: RUNNING scan, old heartbeat, one result already stored
         Instant longAgo = Instant.now().minus(Duration.ofMinutes(10));
         jdbc.update("UPDATE scans SET status = 'RUNNING', worker_id = 'dead-worker', heartbeat_at = ?, started_at = ? WHERE id = ?",
                 Timestamp.from(longAgo), Timestamp.from(longAgo), scan.id());
@@ -135,28 +135,28 @@ class ScanWorkerTest {
     }
 
     @Test
-    @DisplayName("Cache partagé : une seconde analyse du même domaine ne revérifie rien, sauf forceRefresh")
+    @DisplayName("Shared cache: a second scan of the same domain checks nothing again, unless forceRefresh")
     void testSharedCache() throws Exception {
         Scan first = scanService.createScan(new ScanUser("cache-user-1", "a", null), "cache-test.com", false);
         await(() -> statusOf(first.id()) == ScanStatus.COMPLETED, "first scan completed");
         verify(domainCheckService, times(200)).analyze(anyString());
         clearInvocations(domainCheckService);
 
-        // Autre utilisateur, même domaine : tout vient du cache
+        // Another user, same domain: everything comes from the cache
         Scan second = scanService.createScan(new ScanUser("cache-user-2", "b", null), "cache-test.com", false);
         await(() -> statusOf(second.id()) == ScanStatus.COMPLETED, "second scan completed");
         verify(domainCheckService, never()).analyze(anyString());
         assertEquals(200, results.countByScan(second.id()));
         assertEquals("Title", results.findAfter(second.id(), 0, 1).get(0).title());
 
-        // forceRefresh : chaque domaine est vérifié de nouveau
+        // forceRefresh: every domain is checked again
         Scan third = scanService.createScan(new ScanUser("cache-user-3", "c", null), "cache-test.com", true);
         await(() -> statusOf(third.id()) == ScanStatus.COMPLETED, "forced scan completed");
         verify(domainCheckService, times(200)).analyze(anyString());
     }
 
     @Test
-    @DisplayName("Cache partagé : une vérification plus ancienne que la durée de validité est refaite")
+    @DisplayName("Shared cache: a check older than the validity period is done again")
     void testCacheExpiry(@Autowired DomainCheckRepository cache, @Autowired DomainChecker checker) {
         Instant old = Instant.now().minus(Duration.ofHours(25));
         cache.save(new DomainCheck("expired-test.com", "expired-test.com", DomainStatus.SAFE, 200, TlsStatus.VALID,
@@ -168,6 +168,6 @@ class ScanWorkerTest {
         assertEquals("Title", checker.check("expired-test.com", false).title());
         verify(domainCheckService, never()).analyze("fresh-test.com");
         verify(domainCheckService, times(1)).analyze("expired-test.com");
-        assertEquals("Title", cache.find("expired-test.com").orElseThrow().title(), "le cache est mis à jour");
+        assertEquals("Title", cache.find("expired-test.com").orElseThrow().title(), "the cache is updated");
     }
 }

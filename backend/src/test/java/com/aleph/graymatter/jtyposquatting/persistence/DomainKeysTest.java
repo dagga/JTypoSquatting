@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class DomainKeysTest {
 
     @Test
-    @DisplayName("Les domaines sont stockés en punycode minuscule, distincts pour chaque homoglyphe")
+    @DisplayName("Domains are stored in lower-case punycode, distinct for each homoglyph")
     void testKeys() {
         assertEquals("example.com", DomainKeys.toKey("Example.COM"));
         assertEquals("xn--exmple-cua.com", DomainKeys.toKey("exämple.com"));

@@ -65,7 +65,7 @@ for java in /home/nicolas/.jdks/openjdk-24/bin/java /usr/lib/jvm/*/bin/java java
 done
 
 if [ -z "$JAVA_CMD" ]; then
-    echo "[ERROR] Java non trouvé!"
+    echo "[ERROR] Java not found!"
     exit 1
 fi
 
@@ -75,18 +75,18 @@ XVFB_RUNNING=false
 
 if [ -n "$DISPLAY" ]; then
     if xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
-        echo "[OK] Environnement X11 détecté (DISPLAY=$DISPLAY)"
+        echo "[OK] X11 environment detected (DISPLAY=$DISPLAY)"
     else
-        echo "[INFO] DISPLAY=$DISPLAY (présumé disponible)"
+        echo "[INFO] DISPLAY=$DISPLAY (assumed available)"
     fi
 elif pgrep -f "Xvfb :99" >/dev/null 2>&1; then
-    echo "[INFO] Xvfb est déjà lancé sur :99"
+    echo "[INFO] Xvfb is already running on :99"
     export DISPLAY=:99
     XVFB_RUNNING=true
 elif pgrep -f "Xvfb" >/dev/null 2>&1; then
     for disp in 0 1 2 3 4 5; do
         if xdpyinfo -display ":$disp" >/dev/null 2>&1; then
-            echo "[INFO] Xvfb détecté sur :$disp"
+            echo "[INFO] Xvfb detected on :$disp"
             export DISPLAY=:$disp
             XVFB_RUNNING=true
             break
@@ -104,9 +104,9 @@ if [ "$XVFB_RUNNING" = false ] && [ -z "$DISPLAY" ]; then
     done
     
     if [ -z "$XVFB_CMD" ]; then
-        echo "[AVERT] Xvfb n'est pas installé. Continuation sans environnement graphique..."
+        echo "[WARN] Xvfb is not installed. Continuing without a graphical environment..."
     else
-        echo "[INFO] Lancement de Xvfb sur :99..."
+        echo "[INFO] Starting Xvfb on :99..."
         export DISPLAY=:99
         
         if [ "$XVFB_CMD" = "xvfb-run" ]; then
@@ -117,9 +117,9 @@ if [ "$XVFB_RUNNING" = false ] && [ -z "$DISPLAY" ]; then
         sleep 2
         
         if xdpyinfo -display :99 >/dev/null 2>&1; then
-            echo "[OK] Xvfb lancé sur DISPLAY=:99"
+            echo "[OK] Xvfb started on DISPLAY=:99"
         else
-            echo "[AVERT] Impossible de lancer Xvfb. Continuation sans environnement graphique..."
+            echo "[WARN] Could not start Xvfb. Continuing without a graphical environment..."
             unset DISPLAY
         fi
     fi

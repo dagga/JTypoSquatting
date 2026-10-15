@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires des algorithmes de génération ajoutés (omission, clavier, points/tirets, mots, suffixes).
+ * Unit tests of the added generation algorithms (omission, keyboard, dots/dashes, words, suffixes).
  */
 class NewAlgorithmsTest {
 
@@ -32,7 +32,7 @@ class NewAlgorithmsTest {
         return result.stream().map(DomainName::toString).collect(Collectors.toSet());
     }
 
-    // Un domaine d'exemple adapté à chaque algorithme (certains ne s'appliquent qu'à des cas précis)
+    // A sample domain suited to each algorithm (some only apply to specific cases)
     private static final Map<Algorithm, String> SAMPLE_DOMAINS = Map.of(
             Algorithm.STRIP_DASH, "my-example.com",
             Algorithm.DOUBLE_REPLACEMENT, "google.com",
@@ -46,26 +46,26 @@ class NewAlgorithmsTest {
 
     @ParameterizedTest
     @EnumSource(Algorithm.class)
-    @DisplayName("Chaque algorithme déclaré produit au moins une variante, sans le domaine d'origine")
+    @DisplayName("Every declared algorithm produces at least one variant, never the original domain")
     void testEveryAlgorithmGenerates(Algorithm algorithm) throws Exception {
         String domain = SAMPLE_DOMAINS.getOrDefault(algorithm, "example.com");
         Set<String> result = generate(algorithm, domain);
-        assertFalse(result.isEmpty(), algorithm.getId() + " n'a rien généré pour " + domain);
-        assertFalse(result.contains(domain), algorithm.getId() + " a renvoyé le domaine d'origine");
+        assertFalse(result.isEmpty(), algorithm.getId() + " generated nothing for " + domain);
+        assertFalse(result.contains(domain), algorithm.getId() + " returned the original domain");
     }
 
     @Test
-    @DisplayName("Les identifiants d'algorithmes sont uniques")
+    @DisplayName("Algorithm identifiers are unique")
     void testAlgorithmIdsAreUnique() {
         Set<String> ids = new HashSet<>();
         for (Algorithm algorithm : Algorithm.values()) {
-            assertTrue(ids.add(algorithm.getId()), "Identifiant dupliqué : " + algorithm.getId());
+            assertTrue(ids.add(algorithm.getId()), "Duplicate identifier: " + algorithm.getId());
         }
         assertEquals(21, ids.size());
     }
 
     @Test
-    @DisplayName("omission, répétition, inversion")
+    @DisplayName("Omission, repetition, transposition")
     void testCharacterEdits() throws Exception {
         assertTrue(generate(Algorithm.OMISSION, "example.com").contains("exmple.com"));
         assertTrue(generate(Algorithm.REPETITION, "example.com").contains("exxample.com"));
@@ -75,7 +75,7 @@ class NewAlgorithmsTest {
     }
 
     @Test
-    @DisplayName("Les variantes conservent le sous-domaine et le suffixe public (co.uk)")
+    @DisplayName("Variants keep the subdomain and the public suffix (co.uk)")
     void testPartsArePreserved() throws Exception {
         Set<String> result = generate(Algorithm.OMISSION, "www.example.co.uk");
         assertTrue(result.contains("www.exmple.co.uk"), result.toString());
@@ -85,7 +85,7 @@ class NewAlgorithmsTest {
     }
 
     @Test
-    @DisplayName("Remplacement par touche adjacente QWERTY et AZERTY")
+    @DisplayName("Replacement by an adjacent key on QWERTY and AZERTY")
     void testKeyboardReplacement() throws Exception {
         Set<String> result = generate(Algorithm.REPLACEMENT, "example.com");
         assertTrue(result.contains("wxample.com"), "QWERTY : e → w");
@@ -95,22 +95,22 @@ class NewAlgorithmsTest {
     }
 
     @Test
-    @DisplayName("Points et tirets")
+    @DisplayName("Dots and dashes")
     void testDotDash() throws Exception {
         assertTrue(generate(Algorithm.MISSING_DOT, "www.example.com").contains("wwwexample.com"));
         assertTrue(generate(Algorithm.MISSING_DOT, "example.co.uk").contains("exampleco.uk"));
         assertTrue(generate(Algorithm.SUBDOMAIN, "example.com").contains("ex.ample.com"));
         assertTrue(generate(Algorithm.CHANGE_DOT_DASH, "www.example.com").contains("www-example.com"));
-        // Supprimer le seul point produirait un nom sans TLD : rien de valide
+        // Removing the only dot would produce a name without a TLD: nothing valid
         assertTrue(generate(Algorithm.MISSING_DOT, "example.com").isEmpty());
-        // L'extension collée au libellé ne donne pas un domaine enregistrable
+        // An extension glued to the label is not a registrable domain
         assertFalse(generate(Algorithm.MISSING_DOT, "www.example.com").contains("www.examplecom"));
         assertFalse(generate(Algorithm.CHANGE_DOT_DASH, "www.example.com").contains("www.example-com"));
         assertTrue(generate(Algorithm.CHANGE_DOT_DASH, "example.co.uk").contains("example-co.uk"));
     }
 
     @Test
-    @DisplayName("Homophones, singulier/pluriel, chiffres en lettres")
+    @DisplayName("Homophones, singular/plural, numbers as words")
     void testWords() throws Exception {
         assertTrue(generate(Algorithm.HOMOPHONES, "fourseasons.com").contains("forseasons.com"));
         assertTrue(generate(Algorithm.SINGULAR_PLURALIZE, "example.com").contains("examples.com"));
@@ -122,19 +122,19 @@ class NewAlgorithmsTest {
     }
 
     @Test
-    @DisplayName("Mauvais SLD, ajout de TLD, DNS dynamique")
+    @DisplayName("Wrong SLD, added TLD, dynamic DNS")
     void testSuffixes() throws Exception {
         Set<String> sld = generate(Algorithm.WRONG_SLD, "example.co.uk");
         assertTrue(sld.contains("example.org.uk"), sld.toString());
         assertFalse(sld.contains("example.co.uk"));
-        assertTrue(generate(Algorithm.WRONG_SLD, "example.com").isEmpty(), "Pas de SLD à remplacer");
+        assertTrue(generate(Algorithm.WRONG_SLD, "example.com").isEmpty(), "No SLD to replace");
 
         assertTrue(generate(Algorithm.ADD_TLD, "example.com").contains("example.com.br"));
         assertTrue(generate(Algorithm.ADD_DYNAMIC_DNS, "www.example.com").contains("example.duckdns.org"));
     }
 
     @Test
-    @DisplayName("Les fournisseurs DNS dynamiques retenus figurent dans dynamic-dns.json")
+    @DisplayName("The selected dynamic DNS providers are listed in dynamic-dns.json")
     void testDynamicDnsProvidersAreKnown() throws Exception {
         Set<String> known = new HashSet<>();
         try (InputStreamReader reader = new InputStreamReader(
@@ -144,15 +144,15 @@ class NewAlgorithmsTest {
             }
         }
         for (String provider : Const.DYNAMIC_DNS_PROVIDERS) {
-            assertTrue(known.contains("." + provider), provider + " absent de dynamic-dns.json");
+            assertTrue(known.contains("." + provider), provider + " missing from dynamic-dns.json");
         }
     }
 
     @Test
-    @DisplayName("JTypoSquatting agrège tous les algorithmes sans doublon ni domaine d'origine")
+    @DisplayName("JTypoSquatting aggregates every algorithm without duplicates nor the original domain")
     void testAggregation() throws Exception {
         List<String> domains = new JTypoSquatting("example.com").getListOfDomains();
-        assertEquals(domains.size(), new HashSet<>(domains).size(), "Doublons détectés");
+        assertEquals(domains.size(), new HashSet<>(domains).size(), "Duplicates found");
         assertFalse(domains.contains("example.com"));
         assertTrue(domains.contains("exmple.com"));
         assertTrue(domains.contains("example.duckdns.org"));

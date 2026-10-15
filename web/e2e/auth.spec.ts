@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockBackend } from "./mock-backend";
 
-test("un visiteur non connecté est invité à se connecter", async ({ page }) => {
+test("an anonymous visitor is asked to log in", async ({ page }) => {
   await mockBackend(page, { loggedIn: false });
   await page.goto("/fr/app");
 
@@ -13,7 +13,7 @@ test("un visiteur non connecté est invité à se connecter", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Identity provider" })).toBeVisible();
 });
 
-test("un utilisateur connecté voit son nom et peut se déconnecter (avec jeton CSRF)", async ({ page }) => {
+test("a logged-in user sees their name and can log out (with the CSRF token)", async ({ page }) => {
   const requests = await mockBackend(page);
   await page.goto("/en/app");
 
@@ -26,7 +26,7 @@ test("un utilisateur connecté voit son nom et peut se déconnecter (avec jeton 
   expect(logout?.headers["x-xsrf-token"]).toBe("csrf-123");
 });
 
-test("le sélecteur de langue conserve la page courante", async ({ page }) => {
+test("the language switcher keeps the current page", async ({ page }) => {
   await mockBackend(page, { loggedIn: false });
   await page.goto("/fr/faq");
   await page.getByRole("link", { name: "EN", exact: true }).click();
@@ -36,7 +36,7 @@ test("le sélecteur de langue conserve la page courante", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
 });
 
-test("un échec de connexion est signalé sans relancer la connexion", async ({ page }) => {
+test("a login failure is reported without starting the login again", async ({ page }) => {
   await mockBackend(page, { loggedIn: false });
   await page.goto("/fr/app?loginError=1");
 

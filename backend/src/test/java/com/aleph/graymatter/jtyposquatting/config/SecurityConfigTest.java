@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Tests de la configuration de sécurité : mode OIDC (web public) et mode local (application de bureau).
+ * Security configuration tests: OIDC mode (public web service) and local mode (desktop application).
  */
 class SecurityConfigTest {
 
@@ -40,14 +40,14 @@ class SecurityConfigTest {
         private MockMvc mvc;
 
         @Test
-        @DisplayName("L'API refuse les appels non authentifiés avec 401 (pas de redirection)")
+        @DisplayName("The API refuses unauthenticated calls with 401 (no redirect)")
         void testApiRequiresAuthentication() throws Exception {
             mvc.perform(get("/api/scans")).andExpect(status().isUnauthorized());
             mvc.perform(get("/api/scans/some-id/events")).andExpect(status().isUnauthorized());
         }
 
         @Test
-        @DisplayName("Un utilisateur connecté accède à l'API et à son profil")
+        @DisplayName("A logged-in user can access the API and their profile")
         void testAuthenticatedUser() throws Exception {
             mvc.perform(get("/api/scans").with(oidcLogin())).andExpect(status().isOk());
             mvc.perform(get("/api/me").with(oidcLogin().idToken(token -> token
@@ -61,7 +61,7 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("Les requêtes modifiantes exigent un jeton CSRF")
+        @DisplayName("State-changing requests require a CSRF token")
         void testCsrfRequired() throws Exception {
             mvc.perform(post("/api/scans").with(oidcLogin())
                             .contentType("application/json").content("{\"baseDomain\":\"example.com\"}"))
@@ -72,9 +72,9 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("La déconnexion renvoie l'URL de fin de session en JSON (pas de redirection)")
+        @DisplayName("Logout returns the end-session URL as JSON (no redirect)")
         void testJsonLogout() throws Exception {
-            // Enregistrement client de test inconnu du fournisseur : repli sur l'URL par défaut
+            // Test client registration unknown to the provider: falls back to the default URL
             mvc.perform(post("/logout").with(oidcLogin()).with(csrf()))
                     .andExpect(status().isOk())
                     .andExpect(content().contentTypeCompatibleWith("application/json"))
@@ -83,7 +83,7 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("En-têtes de sécurité présents sur les réponses de l'API")
+        @DisplayName("Security headers are present on API responses")
         void testSecurityHeaders() throws Exception {
             mvc.perform(get("/api/me").with(oidcLogin()))
                     .andExpect(header().string("Content-Security-Policy", SecurityConfig.API_CONTENT_SECURITY_POLICY))
@@ -94,14 +94,14 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("HSTS est envoyé sur les requêtes HTTPS")
+        @DisplayName("HSTS is sent on HTTPS requests")
         void testHsts() throws Exception {
             mvc.perform(get("/api/me").secure(true).with(oidcLogin()))
                     .andExpect(header().exists("Strict-Transport-Security"));
         }
 
         @Test
-        @DisplayName("Aucune origine tierce n'est autorisée par CORS")
+        @DisplayName("No third-party origin is allowed by CORS")
         void testNoCrossOrigin() throws Exception {
             mvc.perform(options("/api/scans")
                             .header("Origin", "https://evil.example")
@@ -122,7 +122,7 @@ class SecurityConfigTest {
         private MockMvc mvc;
 
         @Test
-        @DisplayName("Au-delà du débit autorisé, l'API répond 429 avec Retry-After")
+        @DisplayName("Beyond the allowed rate, the API answers 429 with Retry-After")
         void testRateLimit() throws Exception {
             for (int i = 0; i < 3; i++) {
                 mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("rate-user"))))
@@ -131,13 +131,13 @@ class SecurityConfigTest {
             mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("rate-user"))))
                     .andExpect(status().isTooManyRequests())
                     .andExpect(header().exists("Retry-After"));
-            // Le compteur est propre à chaque utilisateur
+            // The counter is per user
             mvc.perform(get("/api/me").with(oidcLogin().idToken(t -> t.subject("other-user"))))
                     .andExpect(status().isOk());
         }
 
         @Test
-        @DisplayName("Le quota d'analyses répond 429")
+        @DisplayName("The scan quota answers 429")
         void testScanQuota() throws Exception {
             mvc.perform(post("/api/scans").with(oidcLogin().idToken(t -> t.subject("quota-user"))).with(csrf())
                             .contentType("application/json").content("{\"baseDomain\":\"example.com\"}"))
@@ -150,7 +150,7 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("Les anciens endpoints du mode bureau n'existent pas en mode web")
+        @DisplayName("The legacy desktop endpoints do not exist in web mode")
         void testLegacyEndpointsAbsent() throws Exception {
             mvc.perform(get("/api/data/all").with(oidcLogin())).andExpect(status().isNotFound());
             mvc.perform(get("/api/cancel").with(oidcLogin())).andExpect(status().isNotFound());
@@ -190,7 +190,7 @@ class SecurityConfigTest {
         private MockMvc mvc;
 
         @Test
-        @DisplayName("La demande d'autorisation utilise PKCE (exigé par le fournisseur d'identité)")
+        @DisplayName("The authorization request uses PKCE (required by the identity provider)")
         void testPkce() throws Exception {
             String location = mvc.perform(get("/oauth2/authorization/oidc"))
                     .andExpect(status().is3xxRedirection())
@@ -201,7 +201,7 @@ class SecurityConfigTest {
         }
 
         @Test
-        @DisplayName("Un échec de connexion ramène à l'application au lieu de relancer la redirection en boucle")
+        @DisplayName("A login failure returns to the application instead of redirecting again in a loop")
         void testLoginFailureDoesNotLoop() throws Exception {
             mvc.perform(get("/login/oauth2/code/oidc").param("error", "invalid_request").param("state", "unknown"))
                     .andExpect(status().is3xxRedirection())
@@ -219,7 +219,7 @@ class SecurityConfigTest {
         private MockMvc mvc;
 
         @Test
-        @DisplayName("Mode bureau : API accessible sans connexion, pas d'utilisateur courant")
+        @DisplayName("Desktop mode: API open without login, no current user")
         void testLocalModeIsOpen() throws Exception {
             mvc.perform(get("/api/data/all")).andExpect(status().isOk());
             mvc.perform(delete("/api/data/all")).andExpect(status().isOk());

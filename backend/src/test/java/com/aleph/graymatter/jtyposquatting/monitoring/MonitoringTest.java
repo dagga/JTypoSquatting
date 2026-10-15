@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Endpoints de supervision : santé et métriques Prometheus métier ; rien d'autre n'est exposé.
+ * Monitoring endpoints: health and business Prometheus metrics; nothing else is exposed.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -32,7 +32,7 @@ class MonitoringTest {
     private ScanService scanService;
 
     @Test
-    @DisplayName("Santé et sondes accessibles sans authentification")
+    @DisplayName("Health and probes are reachable without authentication")
     void testHealth() throws Exception {
         mvc.perform(get("/actuator/health")).andExpect(status().isOk()).andExpect(content().string(containsString("UP")));
         mvc.perform(get("/actuator/health/liveness")).andExpect(status().isOk());
@@ -40,7 +40,7 @@ class MonitoringTest {
     }
 
     @Test
-    @DisplayName("Les métriques métier sont publiées au format Prometheus")
+    @DisplayName("Business metrics are published in the Prometheus format")
     void testPrometheusMetrics() throws Exception {
         scanService.createScan(new ScanUser("metrics-user", "m", null), "metrics-test.com", false);
 
@@ -52,7 +52,7 @@ class MonitoringTest {
     }
 
     @Test
-    @DisplayName("Les endpoints sensibles d'Actuator ne sont pas exposés")
+    @DisplayName("Sensitive Actuator endpoints are not exposed")
     void testSensitiveEndpointsHidden() throws Exception {
         mvc.perform(get("/actuator/env")).andExpect(status().is4xxClientError());
         mvc.perform(get("/actuator/heapdump")).andExpect(status().is4xxClientError());

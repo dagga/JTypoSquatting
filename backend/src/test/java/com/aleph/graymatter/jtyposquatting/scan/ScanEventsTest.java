@@ -27,7 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Flux SSE d'une analyse (reprise par Last-Event-ID) et annulation ciblée.
+ * SSE stream of a scan (resumed with Last-Event-ID) and targeted cancellation.
  */
 @SpringBootTest(properties = {"jtypo.sse.poll-interval-ms=50", "jtypo.quota.max-concurrent-scans=10"})
 // No result printing: it reads the response headers while the SSE thread is still writing
@@ -87,7 +87,7 @@ class ScanEventsTest {
     }
 
     @Test
-    @DisplayName("Le flux envoie tous les résultats puis l'événement de fin")
+    @DisplayName("The stream sends every result, then the end event")
     void testStreamCompletedScan() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("sse-user", "s", null), "example.com", false);
         addResult(scan.id(), "exmple.com");
@@ -105,7 +105,7 @@ class ScanEventsTest {
     }
 
     @Test
-    @DisplayName("Avec Last-Event-ID, seuls les résultats manqués sont renvoyés")
+    @DisplayName("With Last-Event-ID, only the missed results are sent again")
     void testResumeWithLastEventId() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("resume-user", "r", null), "example.org", false);
         addResult(scan.id(), "a.example.org");
@@ -121,7 +121,7 @@ class ScanEventsTest {
     }
 
     @Test
-    @DisplayName("Le flux d'une analyse en cours suit les nouveaux résultats jusqu'à la fin")
+    @DisplayName("The stream of a running scan follows new results until the end")
     void testLiveStream() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("live-user", "l", null), "example.net", false);
         setStatus(scan.id(), ScanStatus.RUNNING);
@@ -143,7 +143,7 @@ class ScanEventsTest {
     }
 
     @Test
-    @DisplayName("Le flux d'un autre utilisateur est refusé")
+    @DisplayName("The stream of another user's scan is refused")
     void testStreamOwnership() throws Exception {
         Scan scan = scanService.createScan(new ScanUser("stream-owner", "o", null), "example.io", false);
         mvc.perform(get("/api/scans/" + scan.id() + "/events").with(user("stream-intruder")))
@@ -151,7 +151,7 @@ class ScanEventsTest {
     }
 
     @Test
-    @DisplayName("L'annulation ne touche que l'analyse visée, et seulement par son propriétaire")
+    @DisplayName("Cancellation only affects the targeted scan, and only by its owner")
     void testCancel() throws Exception {
         Scan mine = scanService.createScan(new ScanUser("canceller", "c", null), "example.com", false);
         Scan other = scanService.createScan(new ScanUser("canceller", "c", null), "example.org", false);

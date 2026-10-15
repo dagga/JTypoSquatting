@@ -48,7 +48,7 @@ subprojects {
     }
 }
 
-// Configuration pour le module shared
+// Configuration of the shared module
 project(':shared') {
     dependencies {
         implementation 'com.google.guava:guava:33.1.0-jre'
@@ -67,7 +67,7 @@ project(':shared') {
     }
 }
 
-// Configuration pour le module backend
+// Configuration of the backend module
 project(':backend') {
     apply plugin: 'org.springframework.boot'
 
@@ -150,7 +150,7 @@ project(':backend') {
 
 }
 
-// Configuration pour le module frontend
+// Configuration of the frontend module
 project(':frontend') {
     apply plugin: 'java'
 

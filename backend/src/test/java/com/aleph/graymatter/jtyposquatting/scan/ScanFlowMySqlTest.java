@@ -27,8 +27,8 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 /**
- * Flux complet des analyses sur un vrai MySQL 8.4 : requêtes des dépôts, plusieurs utilisateurs en
- * parallèle. Les vérifications réseau sont simulées.
+ * Complete scan flow on a real MySQL 8.4: repository queries, several users in parallel.
+ * Network checks are simulated.
  */
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(properties = {
@@ -56,11 +56,11 @@ class ScanFlowMySqlTest {
     private ScanResultRepository results;
 
     @Test
-    @DisplayName("Plusieurs utilisateurs en parallèle : analyses complètes, résultats cloisonnés et sans doublon")
+    @DisplayName("Several users in parallel: complete scans, isolated results, no duplicates")
     void testConcurrentUsers() throws Exception {
         when(domainCheckService.analyze(anyString())).thenAnswer(invocation -> {
             String domain = invocation.getArgument(0);
-            DomainResultDTO result = new DomainResultDTO(domain, DomainStatus.SAFE, "Titre é ✓", "FRENCH", "", 200,
+            DomainResultDTO result = new DomainResultDTO(domain, DomainStatus.SAFE, "Title é ✓", "FRENCH", "", 200,
                     null, "", Map.of("Server", "nginx"));
             result.setTlsStatus(TlsStatus.UNTRUSTED);
             return result;
@@ -83,10 +83,10 @@ class ScanFlowMySqlTest {
             assertEquals(150, stored.size());
             Set<String> domains = new HashSet<>();
             stored.forEach(r -> assertTrue(domains.add(r.domain())));
-            assertEquals("Titre é ✓", stored.get(0).title(), "UTF-8 conservé");
+            assertEquals("Title é ✓", stored.get(0).title(), "UTF-8 preserved");
             assertEquals(Map.of("Server", "nginx"), stored.get(0).httpHeaders(), "colonne JSON");
             assertEquals(TlsStatus.UNTRUSTED, stored.get(0).tlsStatus());
-            assertTrue(stored.get(0).id() < stored.get(149).id(), "ordre des événements");
+            assertTrue(stored.get(0).id() < stored.get(149).id(), "event order");
         }
         assertEquals(1, scanService.listScans(new ScanUser("mysql-user-0", "u0", null), 50).size());
         assertEquals(com.aleph.graymatter.jtyposquatting.persistence.DomainKeys.toKey("exämple0.com"), created.get(0).baseDomain());

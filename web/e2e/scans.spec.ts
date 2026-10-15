@@ -7,7 +7,7 @@ const PNG = Buffer.from(
   "base64",
 );
 
-test("lancer une analyse envoie le domaine avec le jeton CSRF et ouvre la page de l'analyse", async ({ page }) => {
+test("starting a scan sends the domain with the CSRF token and opens the scan page", async ({ page }) => {
   const requests = await mockBackend(page, { scans: [scan()], events: { "scan-1": sse([{ event: "end", data: scan({ status: "COMPLETED" }) }]) } });
   await page.goto("/fr/app");
 
@@ -21,7 +21,7 @@ test("lancer une analyse envoie le domaine avec le jeton CSRF et ouvre la page d
   expect(create!.headers["x-xsrf-token"]).toBe("csrf-123");
 });
 
-test("un quota atteint est expliqué à l'utilisateur", async ({ page }) => {
+test("a reached quota is explained to the user", async ({ page }) => {
   await mockBackend(page, {
     createScan: (route) =>
       route.fulfill({ status: 429, headers: { "Retry-After": "42" }, json: { error: "Daily scan quota reached (50 per 24 hours)" } }),
@@ -34,7 +34,7 @@ test("un quota atteint est expliqué à l'utilisateur", async ({ page }) => {
   await expect(page.getByRole("main").getByRole("alert")).toContainText("42 s");
 });
 
-test("les résultats arrivent en direct, avec compteurs, filtre, détails et avertissement", async ({ page }) => {
+test("results arrive live, with counters, filter, details and warning", async ({ page }) => {
   const results = [
     result(1, "exmple.com", { status: "Suspicious", screenshotUrl: "/api/screenshots/abc", tlsStatus: "UNTRUSTED" }),
     result(2, "ехаmple.com", { domainAscii: "xn--mple-43d4a.com", status: "Safe", httpCode: 301 }),
@@ -80,7 +80,7 @@ test("les résultats arrivent en direct, avec compteurs, filtre, détails et ave
   await expect(warning).toBeHidden();
 });
 
-test("l'export CSV neutralise les formules et conserve l'Unicode", async ({ page }) => {
+test("the CSV export neutralises formulas and keeps Unicode", async ({ page }) => {
   await mockBackend(page, {
     scans: [scan({ status: "COMPLETED" })],
     events: {
@@ -100,7 +100,7 @@ test("l'export CSV neutralise les formules et conserve l'Unicode", async ({ page
   expect(csv).toContain(`"'=HYPERLINK(""http://evil"")"`);
 });
 
-test("annuler une analyse en cours envoie DELETE", async ({ page }) => {
+test("cancelling a running scan sends DELETE", async ({ page }) => {
   const requests = await mockBackend(page, { scans: [scan()], events: { "scan-1": "" } });
   await page.goto("/fr/app/scans/scan-1");
   await page.getByRole("button", { name: "Annuler l'analyse" }).click();
@@ -109,7 +109,7 @@ test("annuler une analyse en cours envoie DELETE", async ({ page }) => {
   expect(requests.some((r) => r.method === "DELETE" && r.url === "/api/scans/scan-1")).toBe(true);
 });
 
-test("50 000 résultats (limite par analyse) restent fluides : seules les lignes visibles sont rendues", async ({ page }) => {
+test("50,000 results (the per-scan limit) stay fluid: only visible rows are rendered", async ({ page }) => {
   test.setTimeout(120_000);
   const many = Array.from({ length: 50_000 }, (_, i) => result(i + 1, `variant-${i + 1}.com`));
   await mockBackend(page, {
@@ -129,22 +129,22 @@ test("50 000 résultats (limite par analyse) restent fluides : seules les lignes
   await page.getByTestId("results-scroll").evaluate((el) => el.scrollTo(0, el.scrollHeight));
   await expect(page.getByRole("row").filter({ hasText: "variant-50000.com" })).toBeVisible();
 
-  // Le filtre reste réactif sur 50 000 lignes
+  // The filter stays responsive on 50,000 rows
   const start = Date.now();
   await page.getByLabel("Filtrer").fill("variant-4999");
-  // variant-4999 et variant-49990 à 49999, plus la ligne d'en-tête
+  // variant-4999 and variant-49990 to 49999, plus the header row
   await expect(page.getByRole("row")).toHaveCount(12);
   expect(Date.now() - start).toBeLessThan(3000);
 });
 
-test("une analyse d'un autre utilisateur affiche une erreur", async ({ page }) => {
+test("a scan of another user shows an error", async ({ page }) => {
   await mockBackend(page, { scans: [] });
   await page.route("**/api/scans/other", (route) => route.fulfill({ status: 403, json: { error: "forbidden" } }));
   await page.goto("/fr/app/scans/other");
   await expect(page.getByRole("main").getByRole("alert")).toHaveText("Cette analyse ne vous appartient pas.");
 });
 
-test("chaque résultat n'apparaît qu'une fois, même renvoyé ou avec un chargement lent", async ({ page }) => {
+test("each result appears once, even when sent again or when loading is slow", async ({ page }) => {
   const errors: string[] = [];
   page.on("console", (message) => message.type() === "error" && errors.push(message.text()));
   const results = [result(1, "a.com"), result(2, "b.com"), result(3, "c.com")];
@@ -153,13 +153,13 @@ test("chaque résultat n'apparaît qu'une fois, même renvoyé ou avec un charge
     events: {
       "scan-1": sse([
         ...results.map((r) => ({ event: "result", id: r.id, data: r })),
-        // Renvoyé après une reconnexion
+        // Sent again after a reconnection
         { event: "result", id: 2, data: results[1] },
         { event: "end", data: scan({ status: "COMPLETED", checkedDomains: 3 }) },
       ]),
     },
   });
-  // Chargement lent de l'analyse : le flux s'ouvre après un éventuel démontage (double montage de StrictMode)
+  // Slow scan loading: the stream opens after a possible unmount (StrictMode double mount)
   await page.route("**/api/scans/scan-1", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     await route.fulfill({ json: scan() });
